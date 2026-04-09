@@ -34,6 +34,8 @@ from .video import encode_video_direct, extract_frames_and_audio
 @click.option("--video", "videos", multiple=True, help="Video file path or URL (repeatable).")
 @click.option("--video-extract", is_flag=True, default=False,
               help="Use frame extraction mode instead of direct passthrough (requires ffmpeg).")
+@click.option("--video-passthrough", is_flag=True, default=False,
+              help="Force URL passthrough for remote videos (skip download, save bandwidth).")
 @click.option("--fps", default=1.0, type=click.FloatRange(min=0.1), help="Frame extraction rate (default: 1). Only with --video-extract.")
 @click.option("--max-frames", default=30, type=click.IntRange(min=1), help="Max frames to extract (default: 30). Only with --video-extract.")
 @click.option("--model", default=None, help="Override the default model.")
@@ -47,6 +49,7 @@ def main(
     audios: tuple[str, ...],
     videos: tuple[str, ...],
     video_extract: bool,
+    video_passthrough: bool,
     fps: float,
     max_frames: int,
     model: str | None,
@@ -85,6 +88,10 @@ def main(
     # --- Prepare video ---
     extras: list[dict] = []
 
+    # Determine URL passthrough: CLI flag > registry > default (download)
+    model_info = get_model(cfg.model)
+    use_passthrough = video_passthrough or (model_info.video_url_passthrough if model_info else False)
+
     for video_src in videos:
         if video_extract:
             frames, audio_part = extract_frames_and_audio(
@@ -97,7 +104,7 @@ def main(
             if audio_part:
                 audio_content.append(audio_part)
         else:
-            extras.append(encode_video_direct(video_src))
+            extras.append(encode_video_direct(video_src, url_passthrough=use_passthrough))
 
     answer = chat(
         cfg,

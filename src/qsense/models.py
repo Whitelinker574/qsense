@@ -20,6 +20,7 @@ class ModelInfo:
     video: bool = False
     native_video: bool = False
     stream_only: bool = False
+    video_url_passthrough: bool = False
     context_tokens: int | None = None
     max_image_size_mb: int | None = None
     max_image_resolution: str | None = None
@@ -51,6 +52,7 @@ def _load_registry() -> list[ModelInfo]:
             video=e.get("video", False),
             native_video=e.get("native_video", False),
             stream_only=e.get("stream_only", False),
+            video_url_passthrough=e.get("video_url_passthrough", False),
             context_tokens=e.get("context_tokens"),
             max_image_size_mb=e.get("max_image_size_mb"),
             max_image_resolution=str(e["max_image_resolution"]) if e.get("max_image_resolution") else None,

@@ -7,6 +7,7 @@
   audio: true
   video: true
   native_video: true          # 1FPS 抽帧 + 音轨，非真原生流式
+  video_url_passthrough: false # 代理透传不稳定，默认下载编码；用 --video-passthrough 手动启用
   context_tokens: 1048576     # 1M
   max_image_size_mb: 7        # inline; Cloud Storage 30MB
   max_image_resolution: null   # 无固定上限，按 token 预算分 tile
@@ -24,6 +25,7 @@
   audio: true
   video: true
   native_video: true
+  video_url_passthrough: false
   context_tokens: 1048576
   max_image_size_mb: 7
   max_image_resolution: null
@@ -139,6 +141,7 @@
   audio: false
   video: true                  # 实验性支持
   native_video: true           # 原生视频理解（实验性）
+  video_url_passthrough: false
   context_tokens: 262144       # 256K
   max_image_size_mb: 100       # 受请求体 100MB 限制
   max_image_resolution: 4096x2160  # 4K

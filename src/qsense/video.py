@@ -133,13 +133,16 @@ def _encode_local(path: Path) -> dict:
 # Direct mode — encode whole video as data URL
 # ---------------------------------------------------------------------------
 
-def encode_video_direct(source: str) -> dict:
-    """Encode a video as a data-URL content part.
+def encode_video_direct(source: str, *, url_passthrough: bool = False) -> dict:
+    """Encode a video as a content part.
 
-    * Remote URL → download, encode as base64 data URL.
+    * Remote URL + passthrough → pass URL directly (saves bandwidth).
+    * Remote URL (default) → download, encode as base64 data URL.
     * Local path → read, encode as base64 data URL.
     """
     if source.startswith(("http://", "https://")):
+        if url_passthrough:
+            return {"type": "image_url", "image_url": {"url": source}}
         raw, mime = _download_video(source, DIRECT_MAX_BYTES)
         encoded = base64.b64encode(raw).decode()
         return {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{encoded}"}}
