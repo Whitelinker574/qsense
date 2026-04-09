@@ -9,6 +9,7 @@ import sys
 
 import click
 
+from . import __version__
 from .audio import prepare_audios
 from .client import chat
 from .config import (
@@ -26,14 +27,15 @@ from .video import encode_video_direct, extract_frames_and_audio
 
 
 @click.group(invoke_without_command=True)
+@click.version_option(version=__version__, prog_name="qsense")
 @click.option("--prompt", default=None, help="Text prompt for the model.")
 @click.option("--image", "images", multiple=True, help="Image path or URL (repeatable).")
 @click.option("--audio", "audios", multiple=True, help="Audio file path or URL (repeatable).")
 @click.option("--video", "videos", multiple=True, help="Video file path or URL (repeatable).")
 @click.option("--video-extract", is_flag=True, default=False,
               help="Use frame extraction mode instead of direct passthrough (requires ffmpeg).")
-@click.option("--fps", default=1.0, type=float, help="Frame extraction rate (default: 1). Only with --video-extract.")
-@click.option("--max-frames", default=30, type=int, help="Max frames to extract (default: 30). Only with --video-extract.")
+@click.option("--fps", default=1.0, type=click.FloatRange(min=0.1), help="Frame extraction rate (default: 1). Only with --video-extract.")
+@click.option("--max-frames", default=30, type=click.IntRange(min=1), help="Max frames to extract (default: 30). Only with --video-extract.")
 @click.option("--model", default=None, help="Override the default model.")
 @click.option("--timeout", default=None, type=int, help="Request timeout in seconds.")
 @click.option("--max-size", default=None, type=int, help="Max image longest side in pixels (default: 2048).")
@@ -75,10 +77,10 @@ def main(
 
     # --- Prepare images ---
     image_kwargs = {"max_long_side": max_size} if max_size else {}
-    image_content = list(prepare_images(images, **image_kwargs)) if images else []
+    image_content = prepare_images(images, **image_kwargs) if images else []
 
     # --- Prepare audio ---
-    audio_content = list(prepare_audios(audios)) if audios else []
+    audio_content = prepare_audios(audios) if audios else []
 
     # --- Prepare video ---
     extras: list[dict] = []
@@ -244,11 +246,13 @@ def _run_install(cmd: list[str], fallback_hint: str) -> None:
 
 
 def _format_tokens(n: int | None) -> str:
-    if not n:
+    if n is None:
         return "?"
     if n >= 1_000_000:
         return f"{n // 1_000_000}M"
-    return f"{n // 1000}K"
+    if n >= 1000:
+        return f"{n // 1000}K"
+    return str(n)
 
 
 @main.command()

@@ -12,14 +12,15 @@ echo "[qsense] Installing QSense..."
 
 # ── 1. 确保 uv 存在 ──
 if ! command -v uv &>/dev/null; then
-    echo "[qsense] Installing uv..."
     if command -v brew &>/dev/null; then
+        echo "[qsense] Installing uv via Homebrew..."
         brew install uv
-    elif command -v curl &>/dev/null; then
-        curl -LsSf https://astral.sh/uv/install.sh | sh
-        export PATH="$HOME/.local/bin:$PATH"
     else
-        echo "[qsense] ERROR: Cannot install uv. Install it manually: https://docs.astral.sh/uv/"
+        echo "[qsense] ERROR: uv is required but not installed."
+        echo "  Install uv first: https://docs.astral.sh/uv/getting-started/installation/"
+        echo "  macOS:   brew install uv"
+        echo "  Linux:   curl -LsSf https://astral.sh/uv/install.sh | sh"
+        echo "  Windows: powershell -c 'irm https://astral.sh/uv/install.ps1 | iex'"
         exit 1
     fi
 fi
@@ -42,14 +43,14 @@ CONFIG_FILE="$CONFIG_DIR/.env"
 if [ -f "$CONFIG_FILE" ]; then
     echo "[qsense] Config already exists: $CONFIG_FILE"
 else
-    # 尝试从环境变量自动配置（适合 agent / CI）
     if [ -n "${QSENSE_API_KEY:-}" ]; then
-        mkdir -p "$CONFIG_DIR"
+        mkdir -p "$CONFIG_DIR" && chmod 700 "$CONFIG_DIR"
         cat > "$CONFIG_FILE" <<EOF
 QSENSE_API_KEY=${QSENSE_API_KEY}
 QSENSE_BASE_URL=${QSENSE_BASE_URL:-https://api.openai.com/v1}
 QSENSE_MODEL=${QSENSE_MODEL:-google/gemini-3-flash-preview}
 EOF
+        chmod 600 "$CONFIG_FILE"
         echo "[qsense] Config written from environment variables: $CONFIG_FILE"
     else
         echo "[qsense] No config found. Run 'qsense init' to set up,"
@@ -66,7 +67,6 @@ echo "  Verify:    qsense --help"
 echo "  Models:    qsense models"
 echo ""
 
-# 如果当前 shell 已激活，直接验证
 if command -v qsense &>/dev/null; then
     qsense --help | head -3
 fi

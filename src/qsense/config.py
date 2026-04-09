@@ -32,6 +32,24 @@ def _load_config_file() -> dict[str, str]:
     return {}
 
 
+def _sanitize(value: str) -> str:
+    """Strip newlines and carriage returns to prevent .env injection."""
+    return value.replace("\n", "").replace("\r", "")
+
+
+def _write_config(values: dict[str, str]) -> None:
+    """Write config values to ~/.qsense/.env with restricted permissions."""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_DIR.chmod(0o700)
+    lines = [
+        f"QSENSE_API_KEY={_sanitize(values.get('QSENSE_API_KEY', ''))}",
+        f"QSENSE_BASE_URL={_sanitize(values.get('QSENSE_BASE_URL', DEFAULT_BASE_URL))}",
+        f"QSENSE_MODEL={_sanitize(values.get('QSENSE_MODEL', DEFAULT_MODEL))}",
+    ]
+    CONFIG_FILE.write_text("\n".join(lines) + "\n")
+    CONFIG_FILE.chmod(0o600)
+
+
 def _ask(label: str, default: str | None = None) -> str:
     """Prompt the user for a value, with optional pre-filled default."""
     try:
@@ -55,15 +73,10 @@ def run_first_time_setup() -> dict[str, str]:
     base_url = _ask("Base URL", DEFAULT_BASE_URL)
     model = _ask("Default model", DEFAULT_MODEL)
 
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    lines = [
-        f"QSENSE_API_KEY={api_key}",
-        f"QSENSE_BASE_URL={base_url}",
-        f"QSENSE_MODEL={model}",
-    ]
-    CONFIG_FILE.write_text("\n".join(lines) + "\n")
+    values = {"QSENSE_API_KEY": api_key, "QSENSE_BASE_URL": base_url, "QSENSE_MODEL": model}
+    _write_config(values)
     print(f"[qsense] Configuration saved to {CONFIG_FILE}")
-    return {"QSENSE_API_KEY": api_key, "QSENSE_BASE_URL": base_url, "QSENSE_MODEL": model}
+    return values
 
 
 def show_config() -> dict[str, str]:
@@ -98,13 +111,7 @@ def update_config(
     if model is not None:
         stored["QSENSE_MODEL"] = model
 
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    lines = [
-        f"QSENSE_API_KEY={stored.get('QSENSE_API_KEY', '')}",
-        f"QSENSE_BASE_URL={stored.get('QSENSE_BASE_URL', DEFAULT_BASE_URL)}",
-        f"QSENSE_MODEL={stored.get('QSENSE_MODEL', DEFAULT_MODEL)}",
-    ]
-    CONFIG_FILE.write_text("\n".join(lines) + "\n")
+    _write_config(stored)
 
 
 def load_config(
@@ -140,7 +147,7 @@ def load_config(
         or stored.get("QSENSE_MODEL")
         or DEFAULT_MODEL
     )
-    resolved_timeout = timeout or DEFAULT_TIMEOUT
+    resolved_timeout = timeout if timeout is not None else DEFAULT_TIMEOUT
 
     return Config(
         api_key=api_key,

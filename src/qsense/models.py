@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import sys
 from pathlib import Path
 
 import yaml
@@ -32,7 +33,14 @@ class ModelInfo:
 
 
 def _load_registry() -> list[ModelInfo]:
-    raw = yaml.safe_load(REGISTRY_FILE.read_text(encoding="utf-8"))
+    try:
+        raw = yaml.safe_load(REGISTRY_FILE.read_text(encoding="utf-8"))
+    except Exception as exc:
+        print(f"[qsense] Warning: failed to load model registry: {exc}", file=sys.stderr)
+        return []
+    if not isinstance(raw, list):
+        print("[qsense] Warning: registry.yaml is malformed (expected a list)", file=sys.stderr)
+        return []
     models = []
     for e in raw:
         models.append(ModelInfo(

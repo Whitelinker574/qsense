@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import sys
 
-from openai import OpenAI, Stream
+from openai import APIError, OpenAI, Stream
 
 from .config import Config
 from .models import get_model
@@ -23,8 +23,16 @@ def _collect_stream(stream: Stream) -> str:
 
 
 def _strip_thinking(text: str) -> str:
-    """Remove <think>...</think> blocks (used by some reasoning models)."""
-    return re.sub(r"<think>[\s\S]*?</think>\s*", "", text).strip()
+    """Remove leading <think>...</think> blocks from reasoning models."""
+    return re.sub(r"^\s*(<think>[\s\S]*?</think>\s*)+", "", text).strip()
+
+
+def _format_api_error(exc: Exception) -> str:
+    """Format an API error for display without leaking sensitive details."""
+    if isinstance(exc, APIError):
+        msg = getattr(exc, "message", None) or str(exc.body) if exc.body else ""
+        return f"HTTP {exc.status_code}: {msg}" if exc.status_code else str(msg)
+    return str(exc)
 
 
 def chat(
@@ -51,7 +59,6 @@ def chat(
         timeout=config.timeout,
     )
 
-    # Check registry for stream_only flag
     model_info = get_model(config.model)
     use_stream = model_info.stream_only if model_info else False
 
@@ -61,18 +68,16 @@ def chat(
         else:
             response = client.chat.completions.create(**kwargs, stream=False)
     except Exception as exc:
-        # Fallback: if non-stream fails with stream-related error, retry streaming
         if not use_stream and "stream" in str(exc).lower():
             try:
                 response = client.chat.completions.create(**kwargs, stream=True)
             except Exception as exc2:
-                print(f"[qsense] {exc2}", file=sys.stderr)
+                print(f"[qsense] {_format_api_error(exc2)}", file=sys.stderr)
                 sys.exit(1)
         else:
-            print(f"[qsense] {exc}", file=sys.stderr)
+            print(f"[qsense] {_format_api_error(exc)}", file=sys.stderr)
             sys.exit(1)
 
-    # Extract text
     if isinstance(response, Stream):
         text = _collect_stream(response)
     elif isinstance(response, str):

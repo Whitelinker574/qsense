@@ -81,22 +81,30 @@ def _infer_format_from_url(url: str) -> str | None:
 
 
 def _download_and_encode(url: str) -> AudioContentPart:
-    """Download a remote audio file, detect format, base64-encode."""
+    """Download a remote audio file with size limit, detect format, base64-encode."""
+    max_mb = DOWNLOAD_MAX_BYTES // 1024 // 1024
     try:
         with httpx.Client(timeout=DOWNLOAD_TIMEOUT, follow_redirects=True) as client:
-            resp = client.get(url)
-            resp.raise_for_status()
+            with client.stream("GET", url) as resp:
+                resp.raise_for_status()
+                content_type = resp.headers.get("content-type", "").split(";")[0].strip().lower()
+
+                chunks: list[bytes] = []
+                downloaded = 0
+                for chunk in resp.iter_bytes(chunk_size=64 * 1024):
+                    downloaded += len(chunk)
+                    if downloaded > DOWNLOAD_MAX_BYTES:
+                        _abort(f"Audio too large (>{max_mb} MB): {url}")
+                    chunks.append(chunk)
+    except SystemExit:
+        raise
     except Exception as exc:
         _abort(f"Failed to download audio: {url} ({exc})")
 
-    raw = resp.content
+    raw = b"".join(chunks)
     if len(raw) == 0:
         _abort(f"Downloaded audio is empty: {url}")
-    if len(raw) > DOWNLOAD_MAX_BYTES:
-        mb = len(raw) / 1024 / 1024
-        _abort(f"Audio too large ({mb:.1f} MB, max {DOWNLOAD_MAX_BYTES // 1024 // 1024} MB): {url}")
 
-    content_type = resp.headers.get("content-type", "").split(";")[0].strip().lower()
     fmt = MIME_TO_FORMAT.get(content_type) or _infer_format_from_url(url)
     if not fmt:
         _abort(f"Cannot determine audio format for {url} (Content-Type: {content_type})")
