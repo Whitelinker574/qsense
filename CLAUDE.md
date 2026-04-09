@@ -2,7 +2,9 @@
 
 ## What This Is
 
-QSense (`qsense`) is a multimodal perception infrastructure -- a CLI that sends images, audio, and video to LLMs via OpenAI-compatible APIs. Designed for both humans and agents.
+QSense is a **multimodal perception atomic skill** -- the smallest useful unit for "let a model see/hear something." It takes image/audio/video input, sends it to an LLM via OpenAI-compatible API, returns text.
+
+It is NOT an application or framework. It is a primitive that higher-level skills compose. Video splitting, audio segmentation, batch processing, result parsing -- all belong to the caller, not qsense.
 
 Package: `qsense-cli`. Binary: `qsense`. Docs: `docs/`.
 

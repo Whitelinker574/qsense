@@ -1,15 +1,29 @@
 # QSense
 
-Minimal CLI multimodal understanding tool. Send images, audio, and video to multimodal models via OpenAI-compatible APIs.
+**多模态感知原子技能。** 一条命令让模型"看"图像、"听"音频、"看"视频，返回文字。
+
+QSense 不是应用，是给上层 skill、agent、脚本调用的最底层感知能力。它只做一件事：**把多模态输入送给模型，拿回文字结果。** 视频切片、音频分段、批量处理、结果解析——这些都不是 qsense 的事，留给上层组合。
+
+```
+┌──────────────────────────────────────────────────────┐
+│  上层 Skill / Agent / 脚本                             │
+│  (视频审核、会议纪要、OCR 流水线、内容分析...)            │
+├──────────────────────────────────────────────────────┤
+│  QSense  ← 你在这里                                   │
+│  原子能力：图像/音频/视频 → 模型 → 文字                  │
+├──────────────────────────────────────────────────────┤
+│  OpenAI-compatible API (Gemini, Claude, GPT, Grok...) │
+└──────────────────────────────────────────────────────┘
+```
 
 ## Features
 
-- **Image understanding** -- local files and remote URLs, auto-resize, format validation
-- **Audio understanding** -- local files and remote URLs, auto-download and base64 encoding
-- **Video understanding** -- direct passthrough (default) or ffmpeg frame extraction
-- **Multi-model support** -- Gemini, Claude, GPT, Grok, Kimi, Gemma with curated registry
-- **Streaming auto-detection** -- models requiring streaming are handled transparently
-- **Three-tier config** -- CLI flags > environment variables > `~/.qsense/.env`
+- **Image** -- 本地文件自动缩放编码，远程 URL 直接透传
+- **Audio** -- 本地/远程文件流式下载编码（OpenAI `input_audio` 格式）
+- **Video** -- 直传编码（默认）或 ffmpeg 抽帧+音轨分离
+- **Multi-model** -- Gemini / Claude / GPT / Grok / Kimi / Gemma，YAML 注册表管理
+- **Auto-adapt** -- 流式/非流式自动降级，模型能力自动匹配
+- **Agent-ready** -- 纯文本 stdout 输出，`[qsense]` stderr 错误，exit 0/1，零副作用
 
 ## Quick Start
 
@@ -138,6 +152,24 @@ src/qsense/
   models.py         Model registry loader
   registry.yaml     Curated model list with capabilities
 ```
+
+## Design Philosophy
+
+QSense 是**原子技能（atomic skill）**——不可再分的最小感知单元。
+
+**QSense 做什么：** 把一个/多个文件送给模型，返回文字。就这样。
+
+**QSense 不做什么：** 视频下载、音频切片、批量遍历、结果解析、对话管理、workflow 编排——全部留给上层 skill 组合。
+
+```bash
+# 上层 skill 组合示例：长视频逐段分析
+ffmpeg -i long.mp4 -segment_time 60 -f segment chunk_%03d.mp4
+for f in chunk_*.mp4; do
+  qsense --prompt "总结这一分钟" --video "$f" >> result.txt
+done
+```
+
+保持原子，才能让上层自由选择策略。详见 [docs/design-rationale.md](docs/design-rationale.md)。
 
 ## Requirements
 
