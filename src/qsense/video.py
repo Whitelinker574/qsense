@@ -2,7 +2,7 @@
 
 Frame extraction has two backends:
   1. ffmpeg (preferred) — fast, extracts audio track too
-  2. imageio (fallback) — pure Python, no audio, but always available
+  2. pyav (fallback) — pure Python, extracts frames + audio, no ffmpeg needed
 """
 
 from __future__ import annotations
@@ -161,7 +161,7 @@ def encode_video_direct(source: str, *, url_passthrough: bool = False) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Extract mode — ffmpeg (preferred) or imageio fallback
+# Extract mode — ffmpeg (preferred) or pyav fallback
 # ---------------------------------------------------------------------------
 
 def _extract_with_ffmpeg(
@@ -207,64 +207,109 @@ def _extract_with_ffmpeg(
     return images, audio_part
 
 
-def _extract_with_imageio(
+def _extract_audio_pyav(path: Path, tmp: Path) -> AudioContentPart | None:
+    """Extract audio track using pyav (pure Python)."""
+    try:
+        import av
+    except ImportError:
+        return None
+
+    try:
+        container = av.open(str(path))
+        audio_stream = next((s for s in container.streams if s.type == "audio"), None)
+        if not audio_stream:
+            container.close()
+            return None
+
+        resampler = av.AudioResampler(format="s16", layout="mono", rate=16000)
+        samples: list[bytes] = []
+        for frame in container.decode(audio_stream):
+            for resampled in resampler.resample(frame):
+                samples.append(resampled.to_ndarray().tobytes())
+        container.close()
+
+        raw_pcm = b"".join(samples)
+        if len(raw_pcm) == 0:
+            return None
+
+        # Write as WAV
+        import struct, io
+        buf = io.BytesIO()
+        buf.write(b"RIFF")
+        buf.write(struct.pack("<I", 36 + len(raw_pcm)))
+        buf.write(b"WAVEfmt ")
+        buf.write(struct.pack("<IHHIIHH", 16, 1, 1, 16000, 32000, 2, 16))
+        buf.write(b"data")
+        buf.write(struct.pack("<I", len(raw_pcm)))
+        buf.write(raw_pcm)
+
+        wav_path = tmp / "audio.wav"
+        wav_path.write_bytes(buf.getvalue())
+        return prepare_audio(str(wav_path))
+    except Exception:
+        return None
+
+
+def _extract_with_pyav(
     path: Path,
     tmp: Path,
     fps: float,
     max_frames: int,
     max_image_long_side: int | None,
-) -> tuple[list[ImageContentPart], None]:
-    """Extract frames using imageio (pure Python fallback, no audio)."""
+) -> tuple[list[ImageContentPart], AudioContentPart | None]:
+    """Extract frames + audio using pyav (pure Python fallback)."""
     try:
-        import imageio.v3 as iio
+        import av
     except ImportError:
         _abort(
-            "Neither ffmpeg nor imageio is available for frame extraction.\n"
+            "Neither ffmpeg nor pyav is available for frame extraction.\n"
             "  Install ffmpeg: qsense init (will guide you)\n"
-            "  Or install imageio: pip install imageio[ffmpeg]"
+            "  Or install pyav: pip install 'qsense-cli[video]'"
         )
 
-    print("[qsense] ffmpeg not found, using imageio fallback (no audio extraction)", file=sys.stderr)
+    print("[qsense] ffmpeg not found, using pyav fallback", file=sys.stderr)
 
-    try:
-        frames_raw = iio.imread(str(path), plugin="pyav")
-    except Exception:
-        try:
-            frames_raw = iio.imread(str(path))
-        except Exception as exc:
-            _abort(f"Cannot read video {path}: {exc}")
-
-    total_frames = len(frames_raw)
-    if total_frames == 0:
-        _abort(f"No frames found in video: {path}")
-
-    # Calculate which frames to sample based on fps
-    # Assume ~30fps source if we can't determine
-    try:
-        meta = iio.immeta(str(path), plugin="pyav")
-        source_fps = meta.get("fps", 30)
-    except Exception:
-        source_fps = 30
-
-    frame_interval = max(1, int(source_fps / fps))
-    sampled_indices = list(range(0, total_frames, frame_interval))
-
-    if len(sampled_indices) > max_frames:
-        step = len(sampled_indices) / max_frames
-        sampled_indices = [sampled_indices[int(i * step)] for i in range(max_frames)]
-
-    # Save sampled frames as JPEG
     from PIL import Image
 
-    frame_paths: list[str] = []
-    for i, idx in enumerate(sampled_indices):
-        frame_path = tmp / f"frame_{i:04d}.jpg"
-        img = Image.fromarray(frames_raw[idx])
-        img.save(str(frame_path), format="JPEG", quality=85)
-        frame_paths.append(str(frame_path))
+    # --- Extract frames ---
+    try:
+        container = av.open(str(path))
+        video_stream = next((s for s in container.streams if s.type == "video"), None)
+        if not video_stream:
+            _abort(f"No video stream found in: {path}")
+
+        source_fps = float(video_stream.average_rate or 30)
+        frame_interval = max(1, int(source_fps / fps))
+
+        frame_paths: list[str] = []
+        frame_count = 0
+        for frame in container.decode(video_stream):
+            if frame_count % frame_interval == 0:
+                frame_path = tmp / f"frame_{len(frame_paths):04d}.jpg"
+                img = frame.to_image()
+                img.save(str(frame_path), format="JPEG", quality=85)
+                frame_paths.append(str(frame_path))
+            frame_count += 1
+        container.close()
+    except SystemExit:
+        raise
+    except Exception as exc:
+        _abort(f"Cannot read video {path}: {exc}")
+
+    if not frame_paths:
+        _abort(f"No frames extracted from video: {path}")
+
+    # Uniform sampling if too many
+    if len(frame_paths) > max_frames:
+        step = len(frame_paths) / max_frames
+        frame_paths = [frame_paths[int(i * step)] for i in range(max_frames)]
 
     images = prepare_images(frame_paths, max_long_side=max_image_long_side) if max_image_long_side else prepare_images(frame_paths)
-    return images, None
+
+    # --- Extract audio ---
+    audio_part = _extract_audio_pyav(path, tmp)
+
+    return images, audio_part
 
 
 def extract_frames_and_audio(
@@ -276,7 +321,7 @@ def extract_frames_and_audio(
 ) -> tuple[list[ImageContentPart], AudioContentPart | None]:
     """Extract video frames and optionally audio track.
 
-    Uses ffmpeg if available (frames + audio). Falls back to imageio
+    Uses ffmpeg if available (frames + audio). Falls back to pyav
     for pure Python frame extraction (no audio).
 
     Supports both local files and remote URLs.
@@ -291,9 +336,9 @@ def extract_frames_and_audio(
             path = Path(source).resolve()
             _validate_video(path)
 
-        # Try ffmpeg first, fall back to imageio
+        # Try ffmpeg first, fall back to pyav
         ffmpeg = _has_ffmpeg()
         if ffmpeg:
             return _extract_with_ffmpeg(ffmpeg, path, tmp, fps, max_frames, max_image_long_side)
         else:
-            return _extract_with_imageio(path, tmp, fps, max_frames, max_image_long_side)
+            return _extract_with_pyav(path, tmp, fps, max_frames, max_image_long_side)
