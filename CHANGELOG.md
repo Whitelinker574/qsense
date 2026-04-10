@@ -2,6 +2,25 @@
 
 All notable changes to QSense are documented here.
 
+## [0.2.1] - 2026-04-10
+
+### Added
+
+- **skill-craft meta-skill** ⚠️ *experimental* — a skill for building skills (`skills/skill-craft/`)
+  - 6 design principles: greedy-but-dense description, explain why not MUST, no parroting, skill memory, give URLs not commands, atomic scripts
+  - Complete evaluation system adapted from Anthropic's skill-creator:
+    - Subagent agents: `grader.md` (assertion evaluation + test critique), `comparator.md` (blind A/B comparison), `analyzer.md` (post-hoc analysis + benchmark pattern detection)
+    - Automation scripts: `run_eval.py` (trigger rate testing), `run_loop.py` (eval + improve loop with train/test split), `improve_description.py` (Claude + extended thinking), `aggregate_benchmark.py` (benchmark statistics)
+    - JSON schemas for evals, grading, benchmark, comparison, analysis
+  - CLI design guidance separated into `references/cli-design.md` (not every skill needs a CLI)
+  - SKILL.md follows its own layering rules: 182 lines, all operational detail in references/
+- **qsense trigger tests** — `evals/trigger-tests.md` with 10 should-trigger + 5 should-not-trigger prompts
+- **qsense description optimized** — expanded to cover screenshot analysis, photo description, UI error checking, image comparison
+
+### Changed
+
+- skill-craft SKILL.md restructured: evaluation workflow, CLI design, JSON schemas moved to references/ (was 372 → 182 lines)
+
 ## [0.2.0] - 2026-04-10
 
 ### Added
