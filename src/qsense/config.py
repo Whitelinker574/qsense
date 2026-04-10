@@ -158,28 +158,31 @@ def resolve_model(
 
     Priority:
       1. --model CLI flag (explicit override)
-      2. Per-modality default (audio > video > image, most restrictive first)
-      3. QSENSE_MODEL global default
+      2. Single modality → per-modality default
+      3. Mixed modalities → QSENSE_MODEL global default
     """
     if cli_model:
         return cli_model
 
     stored = _load_config_file()
+    modality_count = sum([has_image, has_audio, has_video])
 
-    # Audio is most restrictive (fewest models support it) → highest priority
-    if has_audio:
-        m = os.environ.get("QSENSE_AUDIO_MODEL") or stored.get("QSENSE_AUDIO_MODEL")
-        if m:
-            return m
-    if has_video:
-        m = os.environ.get("QSENSE_VIDEO_MODEL") or stored.get("QSENSE_VIDEO_MODEL")
-        if m:
-            return m
-    if has_image and not has_audio and not has_video:
-        m = os.environ.get("QSENSE_IMAGE_MODEL") or stored.get("QSENSE_IMAGE_MODEL")
-        if m:
-            return m
+    # Single modality: use modality-specific model if configured
+    if modality_count == 1:
+        if has_image:
+            m = os.environ.get("QSENSE_IMAGE_MODEL") or stored.get("QSENSE_IMAGE_MODEL")
+            if m:
+                return m
+        elif has_audio:
+            m = os.environ.get("QSENSE_AUDIO_MODEL") or stored.get("QSENSE_AUDIO_MODEL")
+            if m:
+                return m
+        elif has_video:
+            m = os.environ.get("QSENSE_VIDEO_MODEL") or stored.get("QSENSE_VIDEO_MODEL")
+            if m:
+                return m
 
+    # Mixed modalities or no modality-specific config: global default
     return (
         os.environ.get("QSENSE_MODEL")
         or stored.get("QSENSE_MODEL")
