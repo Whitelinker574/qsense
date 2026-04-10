@@ -1,176 +1,192 @@
 ---
 name: skill-craft
-description: "Create well-designed Agent Skills. Use when building a new skill, designing a CLI that supports a skill, or improving an existing skill's structure."
-compatibility: "Follows the Agent Skills standard (https://agentskills.io)."
+description: "创建和优化 Agent Skills。当需要构建新 skill、为 skill 设计配套 CLI、改进现有 skill 结构、或优化 skill 的触发率和使用体验时使用。即使用户只是提到想让 agent 学会某个能力，也应该考虑用这个 skill 来设计方案。"
+compatibility: "遵循 Agent Skills 标准 (https://agentskills.io)"
 ---
 
-# Skill Craft -- Build Agent Skills
+# Skill Craft — 创建 Agent Skills
 
-A skill about making skills. This encodes the design philosophy and patterns for building skills that get better over time.
+一个关于如何造 skill 的 skill。
 
-## Core Idea
+## 核心理念
 
-A skill is a **knowledge layer** that teaches an agent how to use a tool. The tool (CLI, API, script) is the execution layer -- it does things. The skill decides *when*, *why*, and *how* to use it.
+Skill 是**知识层**，教 agent 怎么用一个工具。工具（CLI/API/脚本）是**执行层**，负责干活。
 
 ```
-Skill  = what to do, when to do it, what to watch out for
-CLI    = how to do it (the skill's hands)
+Skill = 什么时候做、为什么这么做、注意什么
+CLI   = 怎么做（skill 的手）
 ```
 
-The CLI is scaffolding. The skill is the product.
+CLI 是脚手架，Skill 才是产品。
 
-## Skill Anatomy
+## Skill 的结构
 
-### Three-File Split
+### 三文件分层
 
-Split by how often content changes:
+按内容的变化频率分开存放：
 
 ```
 skills/<name>/
-├── SKILL.md              # Rarely changes. Command syntax, output contract, errors.
+├── SKILL.md              # 很少变。命令语法、输出约定、错误表。
+├── scripts/              # 可选。确定性任务的脚本，agent 调用但不需要读源码。
 └── references/
-    ├── <domain>.md       # Sometimes changes. Domain knowledge, capability tables, strategies.
-    └── user-notes.md     # Always changing. Agent-maintained: preferences, patterns, lessons.
+    ├── <领域>.md          # 偶尔变。领域知识、能力表、策略。
+    └── user-notes.md     # 持续变。agent 自动维护：偏好、经验、教训。
 ```
 
-**Rule: if two pieces of information change at different rates, they belong in different files.**
+**原则：两个信息如果变化频率不同，就不要放在同一个文件里。**
 
-SKILL.md is loaded every time -- keep it small. References are loaded on demand.
+### 三层渐进式加载
 
-### SKILL.md Structure
+1. **元数据**（name + description，~100 词）— 始终在上下文中，用于判断是否触发
+2. **SKILL.md 正文**（< 500 行）— 触发后加载
+3. **references/ 和 scripts/**  — 按需加载，不占常驻上下文
+
+SKILL.md 每次触发都加载，每个 token 都是成本。能挪走的就挪走。
+
+### SKILL.md 模板
 
 ```markdown
 ---
 name: my-skill
-description: "What it does. When to use it. Keep under 1024 chars."
-compatibility: "Runtime requirements: binaries, optional dependencies."
+description: "做什么。什么时候用。保持 1024 字符以内。"
+compatibility: "运行依赖：哪些二进制、可选依赖。"
 ---
 
-# Title
+# 标题
+一句话说明这个 skill 给 agent 带来什么能力。
 
-One-line explanation of what this skill gives the agent.
+## 安装
+怎么装。让 CLI 引导 agent 完成配置。
 
-## Setup
-How to install. Let the CLI guide the agent through config.
+## 快速参考
+覆盖所有主要场景的命令示例。
 
-## Quick Reference
-Command examples covering all major use cases.
+## 使用原则
+指向 references/ 文件。只有安全规则留在本文件。
 
-## Usage Principles
-Pointers to references/ files. Only keep security rules inline.
+## 输出约定
+stdout / stderr / exit code 的规范。
 
-## Output Contract
-stdout/stderr/exit code conventions.
+## 错误速查
+表格：错误 → 原因 → 修复。
 
-## Error Quick Reference
-Table: error → cause → fix.
-
-## Continuous Improvement
-Point to user-notes.md. Tell agent to read before use, update after.
+## 持续改进
+指向 user-notes.md。告诉 agent 用之前读、用之后更新。
 ```
 
-### What Goes Where
+### 什么放哪里
 
-| Content | File | Why |
-|---------|------|-----|
-| Command syntax, flags | SKILL.md | Stable, needed every time |
-| Output format, exit codes | SKILL.md | Contract, rarely changes |
-| Error table | SKILL.md | Agent needs this on failure |
-| Security rules | SKILL.md | Non-negotiable, always loaded |
-| Model/capability tables | references/ | Changes when models update |
-| Strategy decision trees | references/ | Domain knowledge, not syntax |
-| Cost tips, best practices | user-notes.md | Evolves with use |
-| User preferences | user-notes.md | Per-user, agent-maintained |
-| Workflow templates | user-notes.md | Starts generic, becomes specific |
+| 内容 | 文件 | 原因 |
+|------|------|------|
+| 命令语法、参数 | SKILL.md | 稳定，每次都需要 |
+| 输出格式、exit code | SKILL.md | 约定，很少变 |
+| 错误表 | SKILL.md | agent 出错时需要立即查 |
+| 安全规则 | SKILL.md | 不可妥协，必须常驻 |
+| 模型/能力表 | references/ | 随模型更新而变 |
+| 策略决策树 | references/ | 领域知识，不是语法 |
+| 重复性操作 | scripts/ | 脚本执行，不占上下文 |
+| 成本技巧、最佳实践 | user-notes.md | 随使用经验积累 |
+| 用户偏好 | user-notes.md | 每人不同，agent 维护 |
+| 工作流模板 | user-notes.md | 起初通用，逐渐个性化 |
 
-## Design Principles
+## 设计原则
 
-### Let the CLI speak for itself
+### 1. Description 要"贪心"
 
-Don't explain in the skill what the CLI already tells the agent:
+Agent 倾向于**欠触发** skill。description 要写得激进，宁可多触发也别漏掉。
 
-```bash
-# BAD: skill explains every config field
-"Set QSENSE_API_KEY to your API key, QSENSE_BASE_URL to..."
+```yaml
+# 不好 — 太保守，很多相关场景不会触发
+description: "创建 Agent Skills 的工具"
 
-# GOOD: skill says run init, CLI explains the rest
-qsense init    # stderr will tell you what's needed
+# 好 — 主动覆盖相关场景
+description: "创建和优化 Agent Skills。当需要构建新 skill、为 skill 设计配套 CLI、
+改进现有 skill 结构、或优化 skill 的触发率和使用体验时使用。即使用户只是提到
+想让 agent 学会某个能力，也应该考虑用这个 skill 来设计方案。"
 ```
 
-The CLI's --help, error messages, and stderr output ARE documentation. A well-designed CLI reduces what the skill needs to say.
+### 2. 解释 why，不要写 MUST
 
-### CLI design for skills
-
-When building the CLI that supports your skill:
-
-- **Structured errors to stderr** -- agent parses these to decide next steps
-- **Plain result to stdout** -- pipe-safe, no metadata mixed in
-- **Exit codes** -- 0 success, 1 failure, agent checks this
-- **Non-TTY detection** -- when stdin isn't a terminal, print guidance instead of prompting `input()`
-- **`--help` is a fallback** -- if the skill doesn't cover it, agent runs `--help`
-
-### User-notes.md: learning, not logging
-
-The agent maintains user-notes.md. Design it for learning, not logging:
+如果你发现自己在写 ALWAYS 或 NEVER 大写字母，这是一个警告信号。改成解释原因，让 agent 理解意图后自己泛化。
 
 ```markdown
-## Update Triggers
+# 不好 — 命令式，agent 不知道为什么
+MUST: 永远不要在 SKILL.md 中放模型能力表。
 
-Common signals -- not exhaustive, use your judgment:
-
-- User corrects your choice
-- A command fails and you figure out why
-- User expresses a preference
-- You notice a recurring pattern
-
-User can add custom triggers below:
-<!-- Custom triggers: -->
-
-## User Preferences
-## Learned Patterns
-## Lessons
-## Custom Workflows
+# 好 — 解释原因，agent 能举一反三
+模型能力表会随模型更新而变，但 SKILL.md 每次都加载。
+把会变的内容放在 references/ 里，只在需要时加载，节省上下文。
 ```
 
-**Key: "use your judgment" -- don't over-specify triggers.** The agent should develop its own sense of what matters for this user.
+### 3. 让 CLI 自己说话
 
-### Keep SKILL.md under budget
+不要在 skill 里替 CLI 解释配置流程。CLI 的 stderr 和 --help 就是文档。
 
-The agentskills.io spec recommends < 5000 tokens for instructions. Every token in SKILL.md is loaded every time. Ask yourself:
+```bash
+# 不好 — skill 里写了 5 行解释
+"设置 API key：QSENSE_API_KEY=xxx，base URL：QSENSE_BASE_URL=xxx，
+优先级是 CLI 参数 > 环境变量 > ~/.qsense/.env..."
 
-- Does the agent need this *every* time? → SKILL.md
-- Does the agent need this *sometimes*? → references/
-- Will this change as the user uses it? → user-notes.md
-- Does the CLI already say this? → nowhere
-
-### Installation: give the URL, not the command
-
-Different agent platforms install skills differently. Don't write platform-specific commands:
-
-```
-# GOOD
-Install from https://github.com/user/repo
-This skill follows the Agent Skills standard (https://agentskills.io).
-
-# BAD
-For Claude Code: npx skills add ...
-For OpenCode: npx skills add ...
-For Cursor: copy .cursor/rules/...
+# 好 — skill 里 1 行，CLI 自己输出引导
+qsense init    # stderr 会告诉你需要什么
 ```
 
-The agent knows its own platform.
+CLI 设计要点：
+- **结构化错误到 stderr** — agent 解析后决定下一步
+- **纯结果到 stdout** — 可管道，不混入元数据
+- **Exit code** — 0 成功，1 失败
+- **非 TTY 检测** — stdin 不是终端时，打印引导而不是调用 input()
 
-## Checklist
+### 4. User-notes：学习而非记录
 
-When reviewing a skill:
+user-notes.md 是 agent 的记忆文件。设计要点：
 
-- [ ] SKILL.md frontmatter has `name`, `description` (required), `compatibility` (if dependencies exist)
-- [ ] `name` matches parent directory, lowercase, no consecutive hyphens
-- [ ] `description` < 1024 chars, says what AND when
-- [ ] SKILL.md < 5000 tokens
-- [ ] Domain knowledge is in references/, not SKILL.md
-- [ ] user-notes.md exists with triggers and empty sections
-- [ ] CLI errors go to stderr with actionable messages
-- [ ] CLI output goes to stdout, pipe-safe
-- [ ] Non-TTY init provides guidance instead of crashing
-- [ ] No platform-specific install commands hardcoded
+- 给触发信号的**框架**，不要给穷举的关键词列表
+- 写 "use your judgment"，不要写 if-else
+- 给空的分区结构（Preferences / Patterns / Lessons / Workflows），让 agent 自己填
+- 用户也可以加自定义触发规则
+
+### 5. 安装引导：给地址，不给平台命令
+
+每个 agent 框架有自己的安装方式。给项目地址和规范链接就够了：
+
+```
+安装 xxx 技能，项目地址 https://github.com/user/repo
+该 skill 遵循 Agent Skills 标准（https://agentskills.io）。
+请使用你所在平台的 skill 安装方式进行安装。
+```
+
+### 6. 重复工作抽成脚本
+
+如果 agent 每次使用 skill 时都要写类似的辅助代码，那这段代码应该放进 `scripts/`。
+脚本可以直接执行（`python scripts/xxx.py`），不需要加载到上下文中。
+
+## 验证 Skill
+
+### 基础检查清单
+
+- [ ] frontmatter 有 `name` 和 `description`（必需）
+- [ ] `name` 全小写，匹配目录名，无连续连字符
+- [ ] `description` < 1024 字符，说了"做什么"和"什么时候用"
+- [ ] `description` 足够"贪心"，覆盖了边缘场景
+- [ ] SKILL.md < 500 行
+- [ ] 领域知识在 references/，不在 SKILL.md
+- [ ] user-notes.md 存在，有触发框架和空分区
+- [ ] CLI 错误到 stderr，结果到 stdout
+- [ ] 非 TTY 下 init 有引导而不是崩溃
+- [ ] 没有写死平台特定的安装命令
+- [ ] 没有不必要的 MUST/NEVER/ALWAYS
+
+### 触发测试
+
+写 3-5 个测试 prompt 验证 skill 能否正确触发：
+- 2-3 个应该触发的（包括不太明显的边缘场景）
+- 1-2 个不应该触发的（相关但不相关的场景）
+
+如果漏触发多，说明 description 不够"贪心"。如果误触发多，说明 description 边界不清。
+
+## 持续改进
+
+参考 `references/examples.md` 获取实际案例。
+每次创建或改进 skill 后，回顾这份清单，看看哪些原则被遗忘了。
