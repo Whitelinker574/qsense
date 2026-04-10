@@ -15,41 +15,11 @@ references/
 
 为什么拆：模型表随模型更新而变，用户偏好每次使用都可能变，命令语法几乎不变。变化频率不同 = 分开放。
 
-## 案例：让 CLI 自己说话
+## 案例：让工具自己说话
 
-改之前（SKILL.md 里写了 5 行）：
-```
-## 配置
-设置 API key（必需）和 base URL。
-运行: qsense init --api-key <KEY> --base-url <URL>
-或设置环境变量: QSENSE_API_KEY, QSENSE_BASE_URL
-优先级: CLI 参数 > 环境变量 > ~/.qsense/.env
-```
+> CLI 相关的详细案例（非 TTY 检测、前置检查等）在 `references/cli-design.md`。
 
-改之后（SKILL.md 里 1 行）：
-```
-qsense init    # stderr 会告诉你需要什么——问用户要对应信息
-```
-
-CLI 在非 TTY 环境下的输出：
-```
-[qsense] Non-interactive environment detected. Please provide API key and base URL:
-  qsense init --api-key <YOUR_API_KEY> --base-url <YOUR_BASE_URL>
-Ask the user for these values.
-```
-
-5 行 → 1 行。解释的事交给 CLI。
-
-## 案例：前置检查不啰嗦
-
-```bash
-python3 --version               # 需要 Python >= 3.10；没有就让用户装
-pipx --version                  # 没有就: brew install pipx (macOS) / apt install pipx (Linux)
-pipx install qsense-cli         # 全局安装，不用激活环境
-qsense init                     # CLI 引导后续配置
-```
-
-agent 逐行执行，哪行失败注释就告诉它怎么办。不需要写说明段落。
+核心思路：skill 不要替工具解释配置流程，1 行指令 + 工具自己的输出就够了。
 
 ## 案例：Description 的贪心写法
 
@@ -104,6 +74,23 @@ Common signals -- not exhaustive, use your judgment:
 ```
 
 前者是关键词匹配，后者是理解意图。agent 不是正则引擎。
+
+## 案例：User-Notes 的演化路径
+
+user-notes 从具体记录逐步演化为稳定原则：
+
+```
+第 1 次：用户说"用 gemini 别用 claude"
+         → 记录偏好：音频任务用 gemini
+
+第 5 次：发现音频任务全在用 gemini，图片任务全在用 claude
+         → 总结模式：按模态选模型
+
+第 10 次：模式稳定，从未被用户纠正
+         → 固化为原则，从 user-notes 提升到 references/
+```
+
+关键：不是第 1 次就写规则，而是积累足够样本后才抽象。一次不改太多，边际优化不能动摇核心逻辑。
 
 ## 案例：触发测试设计
 
