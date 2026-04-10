@@ -11,6 +11,11 @@ metadata:
 
 One command: files in, text out. QSense is the atomic unit for "let a model see/hear something."
 
+This skill is split into three files:
+- **SKILL.md** (this file) -- command syntax, output contract, error reference. Stable facts.
+- **references/models.md** -- model capabilities, limits, video/audio strategy. Syncs with `qsense models --detail`.
+- **references/user-notes.md** -- user preferences, learned patterns, workflows. You maintain this over time.
+
 ## Setup
 
 ```bash
@@ -47,68 +52,20 @@ qsense models --detail
 
 ## Usage Principles
 
-### Model Selection
+### Model, Video, Audio
 
-Pick the right model for the modality:
+See `references/models.md` for capabilities, limits, video/audio strategy, and user preferences.
+Run `qsense models --detail` for live data. When unsure, use the default model.
 
-| Need | Choose | Why |
-|------|--------|-----|
-| Audio input | `google/gemini-3-flash-preview` | Only Gemini supports audio |
-| Native video | `google/gemini-3-flash-preview` | Most models can't ingest video |
-| Deep reasoning on images | `google/gemini-3.1-pro-preview` | Strongest reasoning, 1M context |
-| Fast image tasks | default (gemini-3-flash) | Cheapest, fastest |
+### Cost, Composability, Patterns
 
-When unsure, use the default model. Only override `--model` when the task needs a specific capability.
-
-### Cost & Token Awareness
-
-- Large images waste tokens. Use `--max-size 1024` for tasks that don't need full resolution (OCR, layout checks).
-- Video is expensive. Prefer `--video-extract --fps 0.5 --max-frames 10` over direct passthrough for quick summaries.
-- Multiple `--image` flags = multiple images in one request. Don't loop single-image calls when multi-image works.
-
-### Video Strategy
-
-```
-Model supports native video? (check `qsense models --detail`)
-  YES  --> direct: qsense --prompt "..." --video clip.mp4
-  NO   --> extract: qsense --prompt "..." --video clip.mp4 --video-extract
-```
-
-- Direct mode preserves temporal info + audio track -- always prefer when available.
-- Video > 20MB: split with `ffmpeg -segment_time 60 -f segment` first, then process segments.
-- `--fps` and `--max-frames` control extraction density. Low fps (0.5) for slow-paced content, higher (2-3) for action.
-
-### Audio Notes
-
-- Only Gemini models accept audio. Don't send `--audio` to Claude/GPT/Grok -- it will fail.
-- Remote audio is downloaded to memory (limit 20MB). For large files, download and trim first.
-- To analyze audio from a video separately: `ffmpeg -i video.mp4 -vn audio.mp3`, then `--audio audio.mp3`.
-
-### Composability
-
-QSense does ONE request per invocation. Batch/pipeline logic belongs to the caller:
-
-```bash
-# Batch images
-for img in screenshots/*.png; do
-  qsense --prompt "any errors?" --image "$img"
-done
-
-# Long video: split then analyze
-ffmpeg -i long.mp4 -segment_time 60 -f segment seg_%03d.mp4
-for seg in seg_*.mp4; do
-  qsense --prompt "summarize" --video "$seg"
-done
-
-# Capture result for downstream use
-result=$(qsense --prompt "extract text" --image doc.png)
-```
+See `references/user-notes.md` for cost tips, learned patterns, and workflow templates.
+QSense does ONE request per invocation -- batch/pipeline logic belongs to the caller.
 
 ### Security
 
 - Never read or log `~/.qsense/.env` -- it contains the API key.
 - Don't pass API keys via `--prompt` or stdout.
-- Config priority: CLI flags > env vars > `~/.qsense/.env`.
 
 ## Output Contract
 
@@ -128,15 +85,12 @@ result=$(qsense --prompt "extract text" --image doc.png)
 
 ## Model Capabilities
 
-| Model | Vision | Audio | Video | Context |
-|-------|--------|-------|-------|---------|
-| google/gemini-3-flash-preview | yes | yes | native | 1M |
-| google/gemini-3.1-pro-preview | yes | yes | native | 1M |
-| gemma-4-31B-it | yes | - | extract | 256K |
-| anthropic/claude-opus-4-6 | yes | - | - | 1M |
-| anthropic/claude-sonnet-4-6 | yes | - | - | 1M |
-| gpt-5.4 | yes | - | - | - |
-| grok-4.20-beta | yes | - | - | 256K |
-| Kimi-K2.5 | yes | - | native* | 256K |
+See `references/models.md` for the full table, per-model limits, and selection guide.
+Or run `qsense models --detail` for live data from registry.
 
-Run `qsense models --detail` for full format/limit info.
+## Continuous Improvement
+
+Read `references/user-notes.md` before using qsense.
+It records this user's preferences, lessons learned, and effective patterns.
+Update it when you notice something worth remembering -- common triggers are listed inside that file, but use your own judgment too.
+Keep entries short and useful.
