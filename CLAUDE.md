@@ -12,8 +12,8 @@ Package: `qsense-cli`. Binary: `qsense`. Docs: `docs/`.
 
 ```bash
 # Setup (once)
-QSENSE_API_KEY=sk-xxx bash setup.sh && source .venv/bin/activate
-# Or: pip install -e . && qsense init --api-key sk-xxx
+pipx install qsense-cli
+qsense init --api-key sk-xxx
 
 # Image
 qsense --prompt "describe" --image photo.png

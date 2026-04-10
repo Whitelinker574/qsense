@@ -2,36 +2,29 @@
 
 ## 安装
 
-### 一键安装（推荐）
+### 推荐安装（全局可用，无需激活环境）
 
 ```bash
-cd /path/to/基础设施
-bash setup.sh
-source .venv/bin/activate
+pipx install qsense-cli
 ```
 
-脚本自动处理：安装 uv → 创建 Python 3.12 虚拟环境 → 安装依赖。
-
-### Agent / CI 静默安装
+### Agent / CI
 
 ```bash
-QSENSE_API_KEY=sk-xxx bash setup.sh
-source .venv/bin/activate
+pipx install qsense-cli
+QSENSE_API_KEY=sk-xxx qsense init --api-key $QSENSE_API_KEY
 ```
 
-设置 `QSENSE_API_KEY` 环境变量后，配置文件自动生成，无需交互输入。
-
-可选环境变量：
+环境变量：
 - `QSENSE_API_KEY` -- API 密钥（必需）
 - `QSENSE_BASE_URL` -- API 地址（默认 `https://api.openai.com/v1`）
 - `QSENSE_MODEL` -- 默认模型（默认 `google/gemini-3-flash-preview`）
 
-### 手动安装
+### 开发安装
 
 ```bash
-uv venv --python 3.12 && source .venv/bin/activate
-uv pip install -e .
-# 或: pip install -e .
+bash setup.sh && source .venv/bin/activate
+# 或: uv venv --python 3.12 && source .venv/bin/activate && uv pip install -e .
 ```
 
 ### 验证

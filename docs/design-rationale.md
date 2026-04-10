@@ -182,9 +182,7 @@ name: visual-understand
 description: 使用多模态模型理解图像/音频/视频内容
 tool: qsense
 setup: |
-  cd /path/to/qsense
-  bash setup.sh
-  source .venv/bin/activate
+  pipx install qsense-cli
   qsense init --api-key $API_KEY
 usage: |
   qsense --prompt "{prompt}" --image "{file}"
