@@ -16,6 +16,9 @@ dependencies = [
     "PyYAML>=6.0",
 ]
 
+[project.optional-dependencies]
+video = ["imageio[pyav]>=2.34"]
+
 [project.scripts]
 qsense = "qsense.cli:main"
 
