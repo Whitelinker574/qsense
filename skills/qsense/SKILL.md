@@ -1,6 +1,6 @@
 ---
 name: qsense
-description: "Multimodal perception CLI: send images, audio, or video to an LLM and get text back. Use for image recognition, audio transcription, video understanding, OCR, and any task where a model needs to see or hear something."
+description: "Multimodal perception CLI: send images, audio, or video to an LLM and get text back. Use for image recognition, screenshot analysis, OCR, photo description, audio transcription, video summarization, and any task where a model needs to see or hear something. Also use when comparing images, analyzing UI screenshots for errors, or extracting information from visual or audio content."
 compatibility: "Requires qsense-cli (pipx install qsense-cli). Optional: ffmpeg for video frame extraction."
 ---
 

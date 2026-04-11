@@ -211,6 +211,25 @@ skills/qsense/
 
 The agent reads `user-notes.md` before each use and updates it when it learns something — a model preference, a failed command's fix, a recurring workflow. **The more you use it, the better it gets.**
 
+### Skill-Craft: A Skill for Building Skills
+
+> ⚠️ **Experimental** — This meta-skill is in early stages and has not been validated across multiple real-world skill creation cycles. Design principles are distilled from building qsense, but may evolve significantly.
+
+This repo also includes `skills/skill-craft/`, a meta-skill that teaches agents how to design and evaluate Agent Skills. It covers:
+
+- **Structure** — Three-file layering by change frequency, progressive context loading
+- **6 Design Principles** — Greedy-but-dense descriptions, explain why not MUST, no parroting, skill memory, give URLs not commands, atomic scripts
+- **Evaluation System** — Subagent-based parallel testing, grading, blind A/B comparison, automated description optimization with train/test split
+- **CLI Design** — Separated into `references/cli-design.md` (not every skill needs a CLI)
+
+```
+skills/skill-craft/
+├── SKILL.md                  # Design principles & structure guide
+├── agents/                   # Subagent instructions (grader, comparator, analyzer)
+├── references/               # Evaluation workflow, CLI design, JSON schemas, examples
+└── scripts/                  # Automated eval: trigger testing, description optimization
+```
+
 ## Project Structure
 
 ```

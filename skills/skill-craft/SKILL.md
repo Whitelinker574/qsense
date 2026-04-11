@@ -10,183 +10,173 @@ compatibility: "遵循 Agent Skills 标准 (https://agentskills.io)"
 
 ## 核心理念
 
-Skill 是**知识层**，教 agent 怎么用一个工具。工具（CLI/API/脚本）是**执行层**，负责干活。
+Skill 是**知识层**——教 agent 怎么做一件事、为什么这么做、注意什么。
 
-```
-Skill = 什么时候做、为什么这么做、注意什么
-CLI   = 怎么做（skill 的手）
-```
+有些 skill 是纯知识（写作规范、代码风格），有些有配套工具（CLI/API/脚本）作为执行层。工具是可选的脚手架，Skill 才是产品。
 
-CLI 是脚手架，Skill 才是产品。
+## 结构
 
-## Skill 的结构
+### 分层原则
 
-### 三文件分层
-
-按内容的变化频率分开存放：
+**两个信息如果变化频率不同，就不要放在同一个文件里。**
 
 ```
 skills/<name>/
-├── SKILL.md              # 很少变。命令语法、输出约定、错误表。
-├── scripts/              # 可选。确定性任务的脚本，agent 调用但不需要读源码。
+├── SKILL.md              # 很少变。核心知识、规则、约定。
+├── scripts/              # 可选。原子脚本，agent 调用但不读源码。
 └── references/
     ├── <领域>.md          # 偶尔变。领域知识、能力表、策略。
-    └── user-notes.md     # 持续变。agent 自动维护：偏好、经验、教训。
+    └── user-notes.md     # 持续变。agent 维护：偏好、经验、教训。
 ```
-
-**原则：两个信息如果变化频率不同，就不要放在同一个文件里。**
 
 ### 三层渐进式加载
 
-1. **元数据**（name + description，~100 词）— 始终在上下文中，用于判断是否触发
-2. **SKILL.md 正文**（< 500 行）— 触发后加载
-3. **references/ 和 scripts/**  — 按需加载，不占常驻上下文
+| 层 | 内容 | 加载时机 | 预算 |
+|----|------|---------|------|
+| 元数据 | name + description | 始终在上下文，和所有 skill 竞争注意力 | ~100 词 |
+| 正文 | SKILL.md | 触发后加载 | < 500 行 |
+| 引用 | references/ + scripts/ | 按需加载 | 不限 |
 
-SKILL.md 每次触发都加载，每个 token 都是成本。能挪走的就挪走。
-
-### SKILL.md 模板
-
-```markdown
----
-name: my-skill
-description: "做什么。什么时候用。保持 1024 字符以内。"
-compatibility: "运行依赖：哪些二进制、可选依赖。"
----
-
-# 标题
-一句话说明这个 skill 给 agent 带来什么能力。
-
-## 安装
-怎么装。让 CLI 引导 agent 完成配置。
-
-## 快速参考
-覆盖所有主要场景的命令示例。
-
-## 使用原则
-指向 references/ 文件。只有安全规则留在本文件。
-
-## 输出约定
-stdout / stderr / exit code 的规范。
-
-## 错误速查
-表格：错误 → 原因 → 修复。
-
-## 持续改进
-指向 user-notes.md。告诉 agent 用之前读、用之后更新。
-```
+SKILL.md 每次触发都全量加载，每个 token 都是成本。能挪走的就挪走。
 
 ### 什么放哪里
 
-| 内容 | 文件 | 原因 |
+| 内容 | 位置 | 原因 |
 |------|------|------|
-| 命令语法、参数 | SKILL.md | 稳定，每次都需要 |
-| 输出格式、exit code | SKILL.md | 约定，很少变 |
-| 错误表 | SKILL.md | agent 出错时需要立即查 |
-| 安全规则 | SKILL.md | 不可妥协，必须常驻 |
-| 模型/能力表 | references/ | 随模型更新而变 |
-| 策略决策树 | references/ | 领域知识，不是语法 |
-| 重复性操作 | scripts/ | 脚本执行，不占上下文 |
-| 成本技巧、最佳实践 | user-notes.md | 随使用经验积累 |
-| 用户偏好 | user-notes.md | 每人不同，agent 维护 |
-| 工作流模板 | user-notes.md | 起初通用，逐渐个性化 |
+| 核心知识、安全规则 | SKILL.md | 稳定，不可妥协 |
+| 领域知识、策略 | references/ | 随领域演进而变 |
+| 确定性操作 | scripts/ | 执行不占上下文 |
+| 偏好、经验、教训 | user-notes.md | 持续积累，因人而异 |
+| CLI 设计规范 | references/cli-design.md | 有 CLI 时才需要 |
 
 ## 设计原则
 
-### 1. Description 要"贪心"
+### 1. Description：贪心且密
 
-Agent 倾向于**欠触发** skill。description 要写得激进，宁可多触发也别漏掉。
+Agent 倾向于**欠触发** skill。description 要主动覆盖边缘场景。但有硬约束：
+
+- **< 1024 字符**，超了被截断
+- **始终在上下文中**，和所有 skill 竞争注意力
+- **是唯一的触发依据**
+
+所以"贪心"不是"长"，是**用最少字符覆盖最大触发面积**。每个词要能拉进一个本来会漏掉的场景。
 
 ```yaml
-# 不好 — 太保守，很多相关场景不会触发
+# 太保守 → 漏触发
 description: "创建 Agent Skills 的工具"
 
-# 好 — 主动覆盖相关场景
-description: "创建和优化 Agent Skills。当需要构建新 skill、为 skill 设计配套 CLI、
-改进现有 skill 结构、或优化 skill 的触发率和使用体验时使用。即使用户只是提到
-想让 agent 学会某个能力，也应该考虑用这个 skill 来设计方案。"
+# 太啰嗦 → 字符浪费在连接词上
+description: "这是一个用于创建和优化 Agent Skills 的 skill。
+它可以帮助你构建新的 skill，也可以帮助你..."
+
+# 贪心且密 → 每个短语都是独立触发锚点
+description: "创建和优化 Agent Skills。当需要构建新 skill、
+设计配套 CLI、改进 skill 结构、优化触发率时使用。
+即使用户只是提到想让 agent 学会某个能力，也应考虑。"
 ```
 
-### 2. 解释 why，不要写 MUST
+技巧：顿号并列触发词，不用句子展开。末尾加兜底语句覆盖未列出的场景。
 
-如果你发现自己在写 ALWAYS 或 NEVER 大写字母，这是一个警告信号。改成解释原因，让 agent 理解意图后自己泛化。
+### 2. 解释 why，不写 MUST
+
+全大写的 ALWAYS/NEVER 是警告信号。解释原因，agent 理解意图后能自己泛化到类似场景。
 
 ```markdown
-# 不好 — 命令式，agent 不知道为什么
+# 不好 — 死规则，agent 不知道为什么
 MUST: 永远不要在 SKILL.md 中放模型能力表。
 
-# 好 — 解释原因，agent 能举一反三
-模型能力表会随模型更新而变，但 SKILL.md 每次都加载。
-把会变的内容放在 references/ 里，只在需要时加载，节省上下文。
+# 好 — 原因清楚，agent 能举一反三
+模型能力表随更新而变，但 SKILL.md 每次触发都加载。
+会变的内容放 references/，按需加载，节省上下文。
 ```
 
-### 3. 让 CLI 自己说话
+### 3. 不做传声筒
 
-不要在 skill 里替 CLI 解释配置流程。CLI 的 stderr 和 --help 就是文档。
+Skill 只写 agent 自己推断不出来的信息。
+
+```markdown
+# 不好 — 复述工具自己会输出的内容
+"--format 支持 json、csv、text 三种格式，默认 json"
+
+# 好 — 只写 agent 推断不出的决策依据
+"批量处理用 csv（下游脚本解析快），单次查看用 text"
+```
+
+判断标准：**删掉这段话，agent 跑一次工具后能自己搞清楚吗？** 能 → 删。不能 → 留。
+
+### 4. 让 skill 拥有记忆
+
+user-notes.md 让 skill **越用越好用**——逐渐适应用户的真实场景和习惯。
+
+**写入框架，不写穷举规则：**
+- "use your judgment"，不要 if-else 关键词列表
+- 给空分区（Preferences / Patterns / Lessons / Workflows），agent 自己填
+
+**记录什么：**
+- 用户偏好、执行记录、踩过的坑、用户的修正信号
+
+**渐进式磨合：**
+- 定期把反复出现的模式**总结为原则**（具体经验 → 抽象规则）
+- 一次不改太多——边际优化不能动摇 skill 核心逻辑
+- 不确定的先标记观察，多次验证后再固化
+- 模式稳定后可从 user-notes 提升到 references/
+
+Skill 不是静态文档，是持续学习系统。种子内容给方向，agent 使用中填充，用户纠正来校准。
+
+### 5. 安装引导：给地址，不给命令
+
+每个 agent 框架安装方式不同，写死命令只会过时。给项目地址和规范链接，agent 知道自己平台怎么装。
+
+### 6. 确定性操作抽成原子脚本
+
+什么时候该写脚本：
+- **重复**：agent 每次都写类似代码（3 次 = 该抽了）
+- **确定性**：步骤固定、输入输出明确，不需要判断
+
+设计成**原子操作**——一个脚本做一件事，输入输出清晰：
 
 ```bash
-# 不好 — skill 里写了 5 行解释
-"设置 API key：QSENSE_API_KEY=xxx，base URL：QSENSE_BASE_URL=xxx，
-优先级是 CLI 参数 > 环境变量 > ~/.qsense/.env..."
+# 好 — 原子，agent 自由编排
+scripts/extract_frames.py  --video x.mp4 --out frames/
+scripts/describe_image.py  --image frame_01.png
+scripts/merge_results.py   --dir frames/ --format markdown
 
-# 好 — skill 里 1 行，CLI 自己输出引导
-qsense init    # stderr 会告诉你需要什么
+# 不好 — 大而全，agent 无法拆分或跳过
+scripts/process_video.py   --video x.mp4 --do-everything
 ```
 
-CLI 设计要点：
-- **结构化错误到 stderr** — agent 解析后决定下一步
-- **纯结果到 stdout** — 可管道，不混入元数据
-- **Exit code** — 0 成功，1 失败
-- **非 TTY 检测** — stdin 不是终端时，打印引导而不是调用 input()
+原子脚本的好处：agent 保留编排权、跨 skill 可复用、独立可测试。
 
-### 4. User-notes：学习而非记录
+## 验证
 
-user-notes.md 是 agent 的记忆文件。设计要点：
+### 检查清单
 
-- 给触发信号的**框架**，不要给穷举的关键词列表
-- 写 "use your judgment"，不要写 if-else
-- 给空的分区结构（Preferences / Patterns / Lessons / Workflows），让 agent 自己填
-- 用户也可以加自定义触发规则
-
-### 5. 安装引导：给地址，不给平台命令
-
-每个 agent 框架有自己的安装方式。给项目地址和规范链接就够了：
-
-```
-安装 xxx 技能，项目地址 https://github.com/user/repo
-该 skill 遵循 Agent Skills 标准（https://agentskills.io）。
-请使用你所在平台的 skill 安装方式进行安装。
-```
-
-### 6. 重复工作抽成脚本
-
-如果 agent 每次使用 skill 时都要写类似的辅助代码，那这段代码应该放进 `scripts/`。
-脚本可以直接执行（`python scripts/xxx.py`），不需要加载到上下文中。
-
-## 验证 Skill
-
-### 基础检查清单
-
-- [ ] frontmatter 有 `name` 和 `description`（必需）
-- [ ] `name` 全小写，匹配目录名，无连续连字符
-- [ ] `description` < 1024 字符，说了"做什么"和"什么时候用"
-- [ ] `description` 足够"贪心"，覆盖了边缘场景
-- [ ] SKILL.md < 500 行
-- [ ] 领域知识在 references/，不在 SKILL.md
-- [ ] user-notes.md 存在，有触发框架和空分区
-- [ ] CLI 错误到 stderr，结果到 stdout
-- [ ] 非 TTY 下 init 有引导而不是崩溃
-- [ ] 没有写死平台特定的安装命令
+- [ ] `name` + `description` 存在，description < 1024 字符
+- [ ] description 足够"贪心"且信息密度高
+- [ ] SKILL.md < 500 行，领域知识在 references/
+- [ ] user-notes.md 存在，有框架和空分区
+- [ ] 没有复述工具自己能传达的信息
 - [ ] 没有不必要的 MUST/NEVER/ALWAYS
+- [ ] 没有写死平台特定的安装命令
+- [ ] 如果有配套 CLI → `references/cli-design.md`
 
 ### 触发测试
 
-写 3-5 个测试 prompt 验证 skill 能否正确触发：
-- 2-3 个应该触发的（包括不太明显的边缘场景）
-- 1-2 个不应该触发的（相关但不相关的场景）
+写 3-5 个 prompt 验证触发：
+- 2-3 个应该触发的（含边缘场景）
+- 1-2 个不应该触发的（相关但不相关）
 
-如果漏触发多，说明 description 不够"贪心"。如果误触发多，说明 description 边界不清。
+漏触发多 → description 不够贪心。误触发多 → 边界不清。
 
-## 持续改进
+完整评估体系（subagent 并行测试、评分、基准统计、description 自动优化）→ `references/evaluation.md`
 
-参考 `references/examples.md` 获取实际案例。
-每次创建或改进 skill 后，回顾这份清单，看看哪些原则被遗忘了。
+## 参考文件
+
+| 类别 | 文件 | 什么时候读 |
+|------|------|-----------|
+| 评估 | `references/evaluation.md` | 测试或改进 skill 时 |
+| CLI | `references/cli-design.md` | skill 有配套 CLI 时 |
+| Schema | `references/schemas.md` | 写评估代码时 |
+| 案例 | `references/examples.md` | 需要参考模式时 |
+| Subagents | `agents/grader.md` `comparator.md` `analyzer.md` | 启动对应 subagent 时 |
+| 脚本 | `scripts/run_eval.py` `run_loop.py` 等 | 运行自动化评估时 |

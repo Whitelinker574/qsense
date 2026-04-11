@@ -211,6 +211,25 @@ skills/qsense/
 
 Agent 每次使用前读取 `user-notes.md`，发现值得记住的事就更新它——模型偏好、失败修复、常用工作流。**用得越多，越好用。**
 
+### Skill-Craft：造 Skill 的 Skill
+
+> ⚠️ **实验阶段** — 这个 meta-skill 尚处于早期，设计原则从构建 qsense 中提炼而来，尚未经过多次真实 skill 创建周期的验证，后续可能会有较大调整。
+
+本仓库还包含 `skills/skill-craft/`，一个教 agent 如何设计和评估 Agent Skills 的 meta-skill：
+
+- **结构设计** — 按变化频率三文件分层、渐进式上下文加载
+- **6 条设计原则** — 贪心且密的 description、解释 why 不写 MUST、不做传声筒、skill 记忆系统、给地址不给命令、原子脚本
+- **评估体系** — subagent 并行测试、评分、盲 A/B 比较、自动 description 优化（train/test 分割防过拟合）
+- **CLI 设计** — 独立到 `references/cli-design.md`（不是每个 skill 都需要 CLI）
+
+```
+skills/skill-craft/
+├── SKILL.md                  # 设计原则与结构指南
+├── agents/                   # subagent 指令（评分、盲比较、分析）
+├── references/               # 评估流程、CLI 设计、JSON schema、实战案例
+└── scripts/                  # 自动化评估：触发测试、description 优化
+```
+
 ## 项目结构
 
 ```
