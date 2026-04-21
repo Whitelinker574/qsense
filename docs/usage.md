@@ -78,6 +78,18 @@ qsense --prompt "对比这两张图的差异" --image before.png --image after.p
 
 `--image` 可重复使用，图片按顺序传给模型。
 
+### 角色化输入
+
+```bash
+qsense --prompt "根据参考和规范审核目标图。" --target page.png --reference ref.png --spec review.md
+qsense --prompt "对比当前页面和上一版。" --target current.png --reference previous.png --context notes.md
+```
+
+- `--target` 表示当前要看的主对象，单次请求最多一个
+- `--reference` 表示对照素材、风格参考、上一版
+- `--context` 表示只提供背景信息，不直接作为判定依据
+- `--spec` 表示规则、要求、审核标准；可传文本文件或媒体文件
+
 ### 控制图片尺寸
 
 ```bash
@@ -85,6 +97,17 @@ qsense --prompt "描述" --image photo.png --max-size 1024
 ```
 
 `--max-size` 设置长边最大像素（默认 2048）。大图会等比缩小，小图不放大。
+
+### 视觉精度控制
+
+```bash
+qsense --prompt "读取图表中的全部小字" --target chart.png --vision-fidelity max
+qsense --prompt "快速扫一眼页面布局" --target layout.png --vision-fidelity low
+```
+
+- `low`: 降低视觉细节预算，适合快速粗看
+- `standard`: 当前默认行为，兼顾成本和细节
+- `max`: 尽量保留更多细节，适合 OCR、小字、密集图表、局部差异
 
 ## 音频理解
 
@@ -173,6 +196,32 @@ qsense --prompt "图片和音频匹配吗" --image frame.png --audio narration.w
 qsense --prompt "对比视频和截图" --video clip.mp4 --image reference.png
 ```
 
+角色化参数和传统参数可以混用，但推荐在审核/对比任务里优先使用 `--target` / `--reference` / `--context` / `--spec`，这样提示组装更稳定。
+
+## 结构化输出
+
+### JSON 响应封装
+
+```bash
+qsense --prompt "提取结论" --target screenshot.png --output json
+```
+
+`--output json` 会返回统一响应封装，包含：
+- `model`
+- `output_format`
+- `text`
+- `warnings`
+- `meta`
+- `data`（当 schema 校验成功时写入解析后的 JSON）
+
+### 使用 Schema 校验模型输出
+
+```bash
+qsense --prompt "提取审核结果" --target screenshot.png --schema review.schema.json --output json
+```
+
+推荐让模型输出纯 JSON 字符串，再用 `--schema` 校验。如果校验通过，`data` 字段会包含解析后的结构化对象；如果不通过，qsense 会直接报错退出。
+
 ## 模型选择
 
 ### 查看可用模型
@@ -252,6 +301,15 @@ export QSENSE_MODEL=google/gemini-3-flash-preview
 | `ffmpeg is required` | 抽帧模式缺少 ffmpeg | 安装 ffmpeg |
 | `Failed to download audio` | 远程音频下载失败 | 检查 URL 是否可访问 |
 | `Cannot determine audio format` | 无法推断音频格式 | 使用明确扩展名的 URL |
-| `Warning: model not in registry` | 使用了未注册的模型 | `qsense models` 查看可用模型 |
+| `model '<id>' is not in the registry` | 指定了未注册的模型，qsense 会直接退出 | 运行 `qsense models` 选择精确模型 ID |
 | `HTTP 401` | API key 无效 | `qsense config --api-key` 更新 |
 | `Stream must be set to true` | 模型要求流式（会自动重试） | 注册表标记 `stream_only: true` |
+
+## 边界说明
+
+QSense 仍然保持原子能力边界，只负责单次多模态观察请求。它现在支持角色化输入、视觉精度控制、JSON 输出和可选 schema 校验，但依然不负责：
+
+- 批处理
+- 自动重跑 / prompt 修复
+- 工作流编排
+- 领域专属审核规则库

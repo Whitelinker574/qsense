@@ -81,3 +81,12 @@ def list_models() -> list[ModelInfo]:
 
 def is_registered(model_id: str) -> bool:
     return model_id in _INDEX
+
+
+def require_registered(model_id: str, *, source: str = "model") -> str:
+    if not is_registered(model_id):
+        raise ValueError(
+            f"{source} '{model_id}' is not in the registry. "
+            "Run 'qsense models' to see available models."
+        )
+    return model_id

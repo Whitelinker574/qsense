@@ -9,6 +9,8 @@ from pathlib import Path
 
 from dotenv import dotenv_values
 
+from .models import require_registered
+
 CONFIG_DIR = Path.home() / ".qsense"
 CONFIG_FILE = CONFIG_DIR / ".env"
 
@@ -38,6 +40,14 @@ class Config:
     base_url: str
     model: str
     timeout: int
+
+
+def _ensure_registered_model_or_exit(model_id: str, *, source: str) -> str:
+    try:
+        return require_registered(model_id, source=source)
+    except ValueError as exc:
+        print(f"[qsense] {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 def _load_config_file() -> dict[str, str]:
@@ -91,6 +101,7 @@ def run_first_time_setup() -> dict[str, str]:
     api_key = _ask("API key")
     base_url = _ask("Base URL", DEFAULT_BASE_URL)
     model = _ask("Default model", DEFAULT_MODEL)
+    _ensure_registered_model_or_exit(model, source="default model")
 
     values = {"QSENSE_API_KEY": api_key, "QSENSE_BASE_URL": base_url, "QSENSE_MODEL": model}
     _write_config(values)
@@ -130,6 +141,15 @@ def update_config(
 ) -> None:
     """Update specific fields in ``~/.qsense/.env``, keeping others intact."""
     stored = _load_config_file()
+
+    for value, label in (
+        (model, "model"),
+        (image_model, "image_model"),
+        (audio_model, "audio_model"),
+        (video_model, "video_model"),
+    ):
+        if value is not None:
+            require_registered(value, source=label)
 
     if api_key is not None:
         stored["QSENSE_API_KEY"] = api_key
@@ -226,6 +246,7 @@ def load_config(
         has_audio=has_audio,
         has_video=has_video,
     )
+    _ensure_registered_model_or_exit(resolved_model, source="model")
     resolved_timeout = timeout if timeout is not None else DEFAULT_TIMEOUT
 
     return Config(

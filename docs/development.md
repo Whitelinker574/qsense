@@ -36,8 +36,11 @@ qsense/
     ├── cli.py                   CLI 入口（Click group + 子命令）
     ├── client.py                API 客户端（stream 自动降级）
     ├── config.py                配置加载 + 首次设置（chmod 600）
+    ├── contracts.py             角色化请求契约
     ├── image.py                 图像处理（Pillow resize + base64）
     ├── audio.py                 音频处理（流式下载 + base64）
+    ├── response.py              结构化响应封装
+    ├── schema.py                Schema 校验辅助
     ├── video.py                 视频处理（直传/下载/抽帧）
     ├── models.py                模型注册表加载器
     └── registry.yaml            模型注册表数据
@@ -60,6 +63,7 @@ qsense/
 - `prepare_image(source)` / `prepare_images(sources)`
 - 远程 URL: 直接透传（`image_url` 字段）
 - 本地文件: Pillow 打开 → 校验尺寸 → 等比缩小 → base64 data URL
+- `resolve_max_long_side()` / `resolve_detail_hint()`: 把 `vision_fidelity` 映射到统一尺寸预算和 provider 细节提示
 - 类型: `ImageContentPart` (TypedDict)
 
 ### `audio.py`
@@ -78,10 +82,23 @@ qsense/
   - 复用 `image.prepare_images()` + `audio.prepare_audio()`
 
 ### `client.py`
-- `chat()`: 构建 message content → OpenAI SDK 调用
+- `chat()`: 构建 message content → OpenAI SDK 调用 → 返回 `ObservationResponse`
 - 流式策略: registry `stream_only` → 直接 stream；否则先 non-stream，失败降级
 - `_format_api_error()`: 异常脱敏，不泄漏 API key
 - `_strip_thinking()`: 去除响应开头的 `<think>` 块
+
+### `contracts.py`
+- `InputRole`: `target` / `reference` / `context` / `spec`
+- `ObservationRequest`: 单次观察请求契约
+- `render_instruction_prefix()` / `render_text_payload()`: 稳定组装角色说明与文本输入
+
+### `response.py`
+- `ObservationResponse`: 统一 stdout JSON 封装
+- `to_json()`: 生成稳定可消费的 JSON 响应
+
+### `schema.py`
+- `validate_json_text()`: 校验模型文本输出是否符合 JSON Schema
+- 优先使用 `jsonschema`，未安装时退回基础校验
 
 ### `models.py`
 - `ModelInfo` frozen dataclass
@@ -93,6 +110,9 @@ qsense/
 - `init`: 初始化配置 + ffmpeg 检测/安装
 - `config`: 查看/修改配置
 - `models`: 列出注册表模型（`--detail` 显示限制）
+- 支持 `--target` / `--reference` / `--context` / `--spec`
+- 支持 `--output json`、`--schema`、`--system`
+- 支持 `--vision-fidelity low|standard|max`
 
 ## 注册表配置参考
 
@@ -187,7 +207,7 @@ CLI flags > 环境变量 > `~/.qsense/.env`。确保交互式使用和 agent 自
 - setup.sh 不 `curl | sh`
 
 ### 最小依赖
-运行时 6 个包（click, openai, httpx, python-dotenv, Pillow, PyYAML）。ffmpeg 可选。
+运行时 7 个包（click, openai, httpx, python-dotenv, Pillow, PyYAML, jsonschema）。ffmpeg 可选。
 
 ### 错误优先
 所有用户可触发的错误路径都有 `[qsense] ...` 格式消息和 exit 1。不吞异常，不静默失败。
@@ -197,6 +217,6 @@ CLI flags > 环境变量 > `~/.qsense/.env`。确保交互式使用和 agent 自
 - 音频 `input_audio` 格式并非所有代理都支持转发
 - 视频 URL 透传依赖代理实现，当前默认走下载编码
 - 注册表是静态的，不会自动从 API `/models` 端点同步
-- 没有 JSON 结构化输出模式
 - 不支持对话上下文/多轮
 - 不支持音频/视频生成，仅理解
+- 不做批处理、自动重跑、工作流编排或领域专属 rubric

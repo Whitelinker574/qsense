@@ -20,10 +20,20 @@ If this file is outdated, run the command and update accordingly.
 
 | Need | Choose | Why |
 |------|--------|-----|
-| Audio input | gemini-3-flash-preview | Only Gemini supports audio |
-| Native video | gemini-3-flash-preview or Kimi-K2.5 | Most models can't ingest video |
-| Deep reasoning on images | gemini-3.1-pro-preview | Strongest reasoning, 1M context |
-| Fast image tasks | default (gemini-3-flash) | Cheapest, fastest |
+| Audio input | `google/gemini-3-flash-preview` | This exact registry model supports audio |
+| Native video | `google/gemini-3-flash-preview` or `Kimi-K2.5` | These exact registry models support native video |
+| Deep reasoning on images | `google/gemini-3.1-pro-preview` | Strongest reasoning, 1M context |
+| Fast image tasks | `google/gemini-3-flash-preview` | Fastest general-purpose registry default |
+
+## Request Shaping
+
+- Before naming any model, run `qsense models` and copy the exact ID from output.
+- Never shorten model IDs, never replace them with memory-based aliases, and never guess a nearby family/version.
+- If an ID is not listed by `qsense models`, treat it as unavailable.
+- Prefer `--target` for the main artifact and `--reference` for comparison assets instead of stacking everything under `--image`.
+- Use `--spec` for review criteria and `--context` for supporting material.
+- Use `--vision-fidelity max` for OCR, dense UI screenshots, charts, or subtle visual regressions.
+- Use `--output json --schema ...` when the caller needs machine-readable findings.
 
 ## Limits Quick Reference
 
