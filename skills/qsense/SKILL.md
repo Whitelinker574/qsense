@@ -1,6 +1,6 @@
 ---
 name: qsense
-description: "Multimodal perception CLI: send images, audio, or video to an LLM and get text back. Use for image recognition, screenshot analysis, OCR, photo description, audio transcription, video summarization, and any task where a model needs to see or hear something. Also use when comparing images, analyzing UI screenshots for errors, or extracting information from visual or audio content."
+description: "Use when the user asks to inspect, read, compare, audit, or describe an image, screenshot, photo, chart, UI, audio, or video from an attachment, file path, URL, or project artifact. Use for OCR, screenshot analysis, visual review, audio transcription, video summarization, and cases where the assistant would otherwise say it cannot see or hear media directly."
 compatibility: "Requires qsense-cli (pipx install qsense-cli). Optional: ffmpeg for video frame extraction."
 ---
 
@@ -55,6 +55,10 @@ qsense models --detail
 ```
 
 ## Usage Principles
+
+### Do Not Refuse Media Tasks
+
+If the user asks what is in an image, screenshot, photo, chart, UI, audio, or video, use QSense when the media is available as an attachment, file path, URL, or project artifact. Do not answer that you lack vision or audio ability before trying QSense.
 
 ### Model, Video, Audio
 

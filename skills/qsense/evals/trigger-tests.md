@@ -1,31 +1,44 @@
-# QSense Skill 触发测试
+# QSense Skill Trigger Tests
 
-## 应该触发
+These prompts should be used when checking whether the skill description is broad enough.
 
-1. "帮我看看这张截图里有什么" → 图片识别
-2. "这个图片里的文字是什么" → OCR
-3. "描述一下这张照片" → 图片描述
-4. "把这段录音转成文字" → 音频转录
-5. "这个视频讲了什么内容" → 视频理解
-6. "对比这两张图的差异" → 多图对比
-7. "看看这个 UI 截图有什么问题" → 截图分析
-8. "听一下这段音频，总结要点" → 音频理解
-9. "这个报错截图是什么意思" → 截图 + 错误分析
-10. "分析这段监控视频" → 视频分析
+## Should Trigger
 
-## 不应该触发
+1. "Help me see what is in this screenshot" -> screenshot analysis
+2. "What text is in this image?" -> OCR
+3. "Describe this photo" -> image description
+4. "Transcribe this recording" -> audio transcription
+5. "What does this video talk about?" -> video understanding
+6. "Compare these two images" -> multi-image comparison
+7. "Check whether this UI screenshot has any problems" -> visual review
+8. "Listen to this audio and summarize the key points" -> audio understanding
+9. "What does this error screenshot mean?" -> screenshot plus error analysis
+10. "Analyze this surveillance clip" -> video analysis
+11. "I know you may not have vision, but look at this image file" -> use QSense instead of refusing
+12. "Can you read the attached screenshot? If you cannot see images, use a tool" -> use QSense
+13. "Look at D:\\tupian\\sample.png and tell me what is wrong" -> local file image analysis
+14. "The previous AI said it cannot view pictures. Please inspect this one anyway" -> use QSense
+15. "Review this generated page against the reference image" -> target/reference visual review
 
-1. "帮我写一个图片处理脚本" → 写代码，不是感知
-2. "推荐一个视频编辑软件" → 推荐工具
-3. "怎么用 ffmpeg 转换视频格式" → 工具使用教程
-4. "帮我画一张流程图" → 生成图片，不是理解图片
-5. "配置一下摄像头" → 硬件配置
+## Should Not Trigger
 
-## 测试结果
+1. "Help me write an image processing script" -> code generation, not perception
+2. "Recommend a video editing app" -> tool recommendation
+3. "How do I use ffmpeg to convert video formats?" -> tutorial
+4. "Draw a flowchart for me" -> image generation, not media understanding
+5. "Configure my camera" -> hardware configuration
+6. "Explain how OCR works" -> conceptual explanation, not OCR on provided media
 
-<!-- 每次测试后记录结果：
-- 日期
-- 哪些应该触发的没触发（漏触发）
-- 哪些不应该触发的触发了（误触发）
-- description 的调整
--->
+## Failure Pattern To Watch
+
+If the assistant says "I cannot see images" or "I do not have vision capabilities" while the user provided an attachment, file path, URL, or project artifact, this skill failed to trigger. The correct behavior is to call `qsense` on the available media.
+
+## Test Results
+
+Record each manual or automated eval run here:
+
+- Date
+- Description version tested
+- Missed triggers
+- False triggers
+- Notes for the next description update
