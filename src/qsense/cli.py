@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path, PurePosixPath
 import sys
+from urllib.parse import urlparse
 
 import click
 
 from . import __version__
 from ._deps import check_video_deps
-from .audio import prepare_audios
+from .audio import SUPPORTED_EXTENSIONS as AUDIO_EXTENSIONS, prepare_audios
 from .client import chat
 from .config import (
     CONFIG_FILE,
@@ -19,9 +22,109 @@ from .config import (
     show_config,
     update_config,
 )
-from .image import prepare_images
+from .contracts import InputRole, ObservationRequest
+from .image import (
+    SUPPORTED_EXTENSIONS as IMAGE_EXTENSIONS,
+    prepare_images,
+    resolve_detail_hint,
+    resolve_max_long_side,
+)
 from .models import get_model, is_registered, list_models
-from .video import encode_video_direct, extract_frames_and_audio
+from .schema import validate_json_text
+from .video import SUPPORTED_EXTENSIONS as VIDEO_EXTENSIONS, encode_video_direct, extract_frames_and_audio
+
+
+# ---------------------------------------------------------------------------
+# Input helpers
+# ---------------------------------------------------------------------------
+
+TEXT_EXTENSIONS = {".txt", ".md", ".markdown", ".json", ".yaml", ".yml"}
+
+
+def _infer_extension(value: str) -> str:
+    if value.startswith(("http://", "https://")):
+        return PurePosixPath(urlparse(value).path).suffix.lower()
+    return Path(value).suffix.lower()
+
+
+def _looks_like_text_file(value: str) -> bool:
+    path = Path(value)
+    return path.exists() and path.suffix.lower() in TEXT_EXTENSIONS
+
+
+def _load_text_value(value: str) -> str:
+    if _looks_like_text_file(value):
+        return Path(value).read_text(encoding="utf-8")
+    return value
+
+
+def _detect_kind(value: str) -> str:
+    ext = _infer_extension(value)
+    if ext in IMAGE_EXTENSIONS:
+        return "image"
+    if ext in AUDIO_EXTENSIONS:
+        return "audio"
+    if ext in VIDEO_EXTENSIONS:
+        return "video"
+    return "text"
+
+
+def _build_request(
+    prompt: str,
+    *,
+    targets: tuple[str, ...],
+    references: tuple[str, ...],
+    contexts: tuple[str, ...],
+    specs: tuple[str, ...],
+    legacy_images: tuple[str, ...],
+    output_format: str,
+    vision_fidelity: str,
+) -> ObservationRequest | None:
+    inputs: list[dict] = []
+    for value in targets:
+        inputs.append({"role": InputRole.TARGET, "kind": _detect_kind(value), "value": value})
+    for value in references:
+        inputs.append({"role": InputRole.REFERENCE, "kind": _detect_kind(value), "value": value})
+    for value in contexts:
+        kind = _detect_kind(value)
+        resolved = _load_text_value(value) if kind == "text" else value
+        inputs.append({"role": InputRole.CONTEXT, "kind": kind, "value": resolved})
+    for value in specs:
+        inputs.append({"role": InputRole.SPEC, "kind": "text", "value": _load_text_value(value)})
+
+    if not inputs and legacy_images:
+        return None
+
+    if not targets and legacy_images:
+        for idx, value in enumerate(legacy_images):
+            role = InputRole.TARGET if idx == 0 else InputRole.CONTEXT
+            inputs.append({"role": role, "kind": "image", "value": value})
+
+    return ObservationRequest(
+        prompt=prompt,
+        inputs=inputs,
+        output_format=output_format,
+        vision_fidelity=vision_fidelity,
+    )
+
+
+def _prepare_role_aware_media(
+    request: ObservationRequest,
+    *,
+    model_id: str,
+    effective_max_size: int,
+) -> tuple[list[dict], list[dict], list[dict]]:
+    detail_hint = resolve_detail_hint(model_id, request.vision_fidelity)
+    image_sources = [item["value"] for item in request.inputs if item["kind"] == "image"]
+    audio_sources = [item["value"] for item in request.inputs if item["kind"] == "audio"]
+    video_sources = [item["value"] for item in request.inputs if item["kind"] == "video"]
+    images = prepare_images(
+        image_sources,
+        max_long_side=effective_max_size,
+        detail_hint=detail_hint,
+    ) if image_sources else []
+    audios = prepare_audios(audio_sources) if audio_sources else []
+    return images, audios, video_sources
 
 
 # ---------------------------------------------------------------------------
@@ -32,6 +135,10 @@ from .video import encode_video_direct, extract_frames_and_audio
 @click.version_option(version=__version__, prog_name="qsense")
 @click.option("--prompt", default=None, help="Text prompt for the model.")
 @click.option("--image", "images", multiple=True, help="Image path or URL (repeatable).")
+@click.option("--target", "targets", multiple=True, help="Primary artifact(s) under review.")
+@click.option("--reference", "references", multiple=True, help="Reference media for comparison.")
+@click.option("--context", "contexts", multiple=True, help="Supporting media or text context.")
+@click.option("--spec", "specs", multiple=True, help="Spec text or a path to a text/markdown/json file.")
 @click.option("--audio", "audios", multiple=True, help="Audio file path or URL (repeatable).")
 @click.option("--video", "videos", multiple=True, help="Video file path or URL (repeatable).")
 @click.option("--video-extract", is_flag=True, default=False,
@@ -45,11 +152,30 @@ from .video import encode_video_direct, extract_frames_and_audio
 @click.option("--model", default=None, help="Override the default model.")
 @click.option("--timeout", default=None, type=int, help="Request timeout in seconds.")
 @click.option("--max-size", default=None, type=int, help="Max image longest side in pixels (default: 2048).")
+@click.option("--system", "system_prompt", default=None, help="Optional system prompt for role/output steering.")
+@click.option("--schema", "schema_path", default=None, help="Optional JSON schema file for validating model output.")
+@click.option(
+    "--output",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Choose plain text or a structured JSON response envelope.",
+)
+@click.option(
+    "--vision-fidelity",
+    type=click.Choice(["low", "standard", "max"]),
+    default="standard",
+    help="Control visual detail budget without changing task semantics.",
+)
 @click.pass_context
 def main(
     ctx: click.Context,
     prompt: str | None,
     images: tuple[str, ...],
+    targets: tuple[str, ...],
+    references: tuple[str, ...],
+    contexts: tuple[str, ...],
+    specs: tuple[str, ...],
     audios: tuple[str, ...],
     videos: tuple[str, ...],
     video_extract: bool,
@@ -59,6 +185,10 @@ def main(
     model: str | None,
     timeout: int | None,
     max_size: int | None,
+    system_prompt: str | None,
+    schema_path: str | None,
+    output_format: str,
+    vision_fidelity: str,
 ) -> None:
     """Minimal CLI multimodal understanding tool."""
     if ctx.invoked_subcommand is not None:
@@ -68,25 +198,58 @@ def main(
         print("[qsense] --prompt is required.", file=sys.stderr)
         sys.exit(1)
 
-    if not images and not audios and not videos:
+    if not images and not targets and not references and not contexts and not audios and not videos:
         print("[qsense] At least one --image, --audio, or --video is required.", file=sys.stderr)
         sys.exit(1)
 
+    request = _build_request(
+        prompt,
+        targets=targets,
+        references=references,
+        contexts=contexts,
+        specs=specs,
+        legacy_images=images,
+        output_format=output_format,
+        vision_fidelity=vision_fidelity,
+    )
+
     cfg = load_config(
         model=model, timeout=timeout,
-        has_image=bool(images), has_audio=bool(audios), has_video=bool(videos),
+        has_image=bool(images or [item for item in (request.inputs if request else []) if item["kind"] == "image"]),
+        has_audio=bool(audios or [item for item in (request.inputs if request else []) if item["kind"] == "audio"]),
+        has_video=bool(videos or [item for item in (request.inputs if request else []) if item["kind"] == "video"]),
     )
 
     if not is_registered(cfg.model):
         click.echo(
-            f"[qsense] Warning: model '{cfg.model}' is not in the registry. "
+            f"[qsense] model '{cfg.model}' is not in the registry. "
             f"Run 'qsense models' to see available models.",
             err=True,
         )
+        sys.exit(1)
 
-    image_kwargs = {"max_long_side": max_size} if max_size else {}
-    image_content = prepare_images(images, **image_kwargs) if images else []
-    audio_content = prepare_audios(audios) if audios else []
+    effective_max_size = max_size or resolve_max_long_side(vision_fidelity)
+    request_prefix = ""
+    if request is not None:
+        request_prefix = request.render_instruction_prefix()
+        text_payload = request.render_text_payload()
+        if text_payload:
+            request_prefix = f"{request_prefix}\n\n{text_payload}" if request_prefix else text_payload
+        image_content, role_aware_audios, role_aware_videos = _prepare_role_aware_media(
+            request,
+            model_id=cfg.model,
+            effective_max_size=effective_max_size,
+        )
+        audio_content = role_aware_audios + (prepare_audios(audios) if audios else [])
+        videos = tuple(role_aware_videos) + videos
+    else:
+        detail_hint = resolve_detail_hint(cfg.model, vision_fidelity)
+        image_content = prepare_images(
+            images,
+            max_long_side=effective_max_size,
+            detail_hint=detail_hint,
+        ) if images else []
+        audio_content = prepare_audios(audios) if audios else []
 
     model_info = get_model(cfg.model)
     use_passthrough = video_passthrough or (model_info.video_url_passthrough if model_info else False)
@@ -104,12 +267,22 @@ def main(
             extras.append(encode_video_direct(src, url_passthrough=use_passthrough))
 
     answer = chat(
-        cfg, prompt,
+        cfg, prompt if not request_prefix else f"{request_prefix}\n\nTASK:\n{prompt}",
         images=image_content or None,
         audios=audio_content or None,
         extras=extras or None,
+        system_prompt=system_prompt,
+        output_format=output_format,
+        vision_fidelity=vision_fidelity,
     )
-    print(answer)
+    if schema_path:
+        schema = json.loads(Path(schema_path).read_text(encoding="utf-8"))
+        answer.data = validate_json_text(answer.text, schema)
+        answer.meta["schema_validated"] = True
+    if output_format == "json":
+        print(answer.to_json())
+    else:
+        print(answer.text)
 
 
 # ---------------------------------------------------------------------------
@@ -147,10 +320,14 @@ def config(
             click.echo(f"  video_model:  {current['video_model']}")
         return
 
-    update_config(
-        api_key=api_key, base_url=base_url, model=model,
-        image_model=image_model, audio_model=audio_model, video_model=video_model,
-    )
+    try:
+        update_config(
+            api_key=api_key, base_url=base_url, model=model,
+            image_model=image_model, audio_model=audio_model, video_model=video_model,
+        )
+    except ValueError as exc:
+        click.echo(f"[qsense] {exc}", err=True)
+        sys.exit(1)
     updated = []
     if api_key is not None:
         updated.append("api_key")
@@ -193,7 +370,11 @@ def init(api_key: str | None, base_url: str | None, model: str | None, force: bo
         return
 
     if api_key:
-        update_config(api_key=api_key, base_url=base_url or DEFAULT_BASE_URL, model=model or DEFAULT_MODEL)
+        try:
+            update_config(api_key=api_key, base_url=base_url or DEFAULT_BASE_URL, model=model or DEFAULT_MODEL)
+        except ValueError as exc:
+            click.echo(f"[qsense] {exc}", err=True)
+            sys.exit(1)
         click.echo(f"[qsense] Config saved to {CONFIG_FILE}")
         final = show_config()
         click.echo(f"  api_key:  {final['api_key']}")

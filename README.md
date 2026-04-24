@@ -14,9 +14,9 @@
 
 ---
 
-One command. Files in, text out.
+One command. Files in, text or JSON out.
 
-QSense is not an app — it's the lowest-level perception primitive for skills, agents, and scripts. It does one thing: **send multimodal input to an LLM, get text back.** Video splitting, audio segmentation, batch processing, result parsing — all belong to the caller.
+QSense is not an app — it's the lowest-level perception primitive for skills, agents, and scripts. It does one thing: **send multimodal input to an LLM, get text or structured JSON back.** Video splitting, audio segmentation, batch processing, rerun loops, and workflow logic still belong to the caller.
 
 ```
 ┌──────────────────────────────────────────────────────┐
@@ -39,7 +39,7 @@ QSense is not an app — it's the lowest-level perception primitive for skills, 
 | 🎬 | **Video** | Direct encode (default) or ffmpeg frame extraction + audio track |
 | 🤖 | **Multi-model** | Gemini / Claude / GPT / Grok / Kimi / Gemma — YAML registry |
 | ⚡ | **Auto-adapt** | Stream/non-stream fallback, model capability matching |
-| 🔌 | **Agent-ready** | Plain text stdout, `[qsense]` stderr errors, exit 0/1, zero side effects |
+| 🔌 | **Agent-ready** | Plain text or JSON stdout, `[qsense]` stderr errors, exit 0/1, zero side effects |
 
 ## Quick Start
 
@@ -72,6 +72,15 @@ QSENSE_API_KEY=sk-xxx qsense init --api-key $QSENSE_API_KEY
 qsense --prompt "What's in this image?" --image screenshot.png
 qsense --prompt "Compare these" --image a.png --image b.png
 qsense --prompt "Describe" --image https://example.com/photo.jpg
+
+# ── Role-aware review ──────────────────────────────
+qsense --prompt "Review the target against the references." --target page.png --reference ref.png --spec review.md
+
+# ── Structured output ──────────────────────────────
+qsense --prompt "Extract review findings." --target screenshot.png --schema review.schema.json --output json
+
+# ── Higher visual detail ───────────────────────────
+qsense --prompt "Read the dense chart." --target chart.png --vision-fidelity max
 
 # ── Audio ──────────────────────────────────────────
 qsense --prompt "Transcribe this" --audio recording.wav
@@ -118,12 +127,21 @@ qsense [OPTIONS] [COMMAND]
 Options:
   --prompt TEXT         Text prompt (required for inference)
   --image TEXT          Image path or URL (repeatable)
+  --target TEXT         Main artifact under review (repeatable, max 1)
+  --reference TEXT      Comparison asset, previous version, or style reference
+  --context TEXT        Supporting context file or media input
+  --spec TEXT           Text or media review criteria / requirements
   --audio TEXT          Audio file path or URL (repeatable)
   --video TEXT          Video file path or URL (repeatable)
   --video-extract       Use ffmpeg frame extraction
   --fps FLOAT           Extraction frame rate (default: 1)
   --max-frames INT      Max extracted frames (default: 30)
   --model TEXT          Override default model
+  --system TEXT         Optional system prompt
+  --output [text|json]  Output mode (default: text)
+  --schema TEXT         Optional JSON schema file for validating response text
+  --vision-fidelity [low|standard|max]
+                        Provider-neutral image detail control
   --timeout INT         Request timeout in seconds
   --max-size INT        Max image longest side in px (default: 2048)
 
@@ -156,9 +174,9 @@ export QSENSE_MODEL=google/gemini-3-flash-preview
 
 > QSense is an **atomic skill** — the smallest indivisible unit of perception.
 
-**What QSense does** — send files to a model, return text. That's it.
+**What QSense does** — send files to a model, return text or a structured response envelope. That's it.
 
-**What QSense does NOT do** — video download, audio slicing, batch iteration, result parsing, conversation management, workflow orchestration. All left to the caller.
+**What QSense does NOT do** — batch iteration, rerun loops, conversation management, workflow orchestration, or domain-specific review rubrics. All left to the caller.
 
 ```bash
 # Compose with higher-level skills
@@ -237,8 +255,11 @@ src/qsense/
   cli.py            Click CLI entry point
   client.py         OpenAI-compatible API client
   config.py         Three-tier config: CLI > env > file
+  contracts.py      Role-aware request contract helpers
   image.py          Image validation, resize, encoding
   audio.py          Audio validation, download, encoding
+  response.py       Structured response envelope
+  schema.py         Optional JSON schema validation
   video.py          Video passthrough and frame extraction
   models.py         Model registry loader
   registry.yaml     Curated model capabilities database

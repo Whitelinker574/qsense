@@ -18,7 +18,7 @@ qsense init --api-key sk-xxx
 # Image
 qsense --prompt "describe" --image photo.png
 
-# Audio (Gemini only)
+# Audio
 qsense --prompt "transcribe" --audio recording.wav
 
 # Video
@@ -98,9 +98,13 @@ Env vars override file. CLI flags override both.
 
 ## Model Selection Guide
 
+Before naming any model, run `qsense models` and copy the exact ID from output.
+If a model is not listed there, treat it as unavailable.
+Never infer, shorten, alias, or substitute model names from memory.
+
 | Need | Model |
 |------|-------|
-| Audio understanding | `google/gemini-3-flash-preview` (only Gemini supports audio) |
+| Audio understanding | `google/gemini-3-flash-preview` |
 | Native video | `google/gemini-3-flash-preview` or `Kimi-K2.5` |
 | Deep reasoning + image | `anthropic/claude-opus-4-6` |
 | Fast image | `google/gemini-3-flash-preview` (default) |

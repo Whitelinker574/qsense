@@ -9,6 +9,7 @@ from openai import APIError, OpenAI, Stream
 
 from .config import Config
 from .models import get_model
+from .response import ObservationResponse
 
 
 def _collect_stream(stream: Stream) -> str:
@@ -41,7 +42,11 @@ def chat(
     images: list[dict] | None = None,
     audios: list[dict] | None = None,
     extras: list[dict] | None = None,
-) -> str:
+    *,
+    system_prompt: str | None = None,
+    output_format: str = "text",
+    vision_fidelity: str = "standard",
+) -> ObservationResponse:
     """Send a multimodal request and return the assistant's text reply."""
     client = OpenAI(api_key=config.api_key, base_url=config.base_url)
 
@@ -58,6 +63,8 @@ def chat(
         messages=[{"role": "user", "content": message_content}],
         timeout=config.timeout,
     )
+    if system_prompt:
+        kwargs["messages"].insert(0, {"role": "system", "content": system_prompt})
 
     model_info = get_model(config.model)
     use_stream = model_info.stream_only if model_info else False
@@ -89,4 +96,9 @@ def chat(
         print("[qsense] No assistant text found in response.", file=sys.stderr)
         sys.exit(1)
 
-    return _strip_thinking(text)
+    return ObservationResponse(
+        model=config.model,
+        output_format=output_format,
+        text=_strip_thinking(text),
+        meta={"vision_fidelity": vision_fidelity, "system_prompt": bool(system_prompt)},
+    )

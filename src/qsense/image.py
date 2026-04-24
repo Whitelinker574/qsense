@@ -17,6 +17,7 @@ from ._util import abort as _abort
 
 class ImageURL(TypedDict):
     url: str
+    detail: str
 
 
 class ImageContentPart(TypedDict):
@@ -41,6 +42,11 @@ EXTENSION_TO_MIME: dict[str, str] = {
 IMAGE_MAX_LONG_SIDE = 2048
 IMAGE_MIN_SIDE = 64
 IMAGE_ENCODE_QUALITY = 85
+FIDELITY_TO_MAX_LONG_SIDE: dict[str, int] = {
+    "low": 1024,
+    "standard": IMAGE_MAX_LONG_SIDE,
+    "max": 4096,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +88,7 @@ def _encode_to_data_url(img: Image.Image, mime: str) -> str:
 def _load_and_process(
     path: Path,
     max_long_side: int,
+    detail_hint: str | None = None,
 ) -> ImageContentPart:
     """Open a local image file → validate → resize → encode."""
     ext = path.suffix.lower()
@@ -102,7 +109,24 @@ def _load_and_process(
 
     img = _fit_to_limit(img, max_long_side)
     data_url = _encode_to_data_url(img, mime)
-    return {"type": "image_url", "image_url": {"url": data_url}}
+    image_url: ImageURL = {"url": data_url}
+    if detail_hint is not None:
+        image_url["detail"] = detail_hint
+    return {"type": "image_url", "image_url": image_url}
+
+
+def resolve_max_long_side(vision_fidelity: str) -> int:
+    return FIDELITY_TO_MAX_LONG_SIDE[vision_fidelity]
+
+
+def resolve_detail_hint(model_id: str, vision_fidelity: str) -> str | None:
+    if not model_id.startswith("gpt-"):
+        return None
+    return {
+        "low": "low",
+        "standard": "high",
+        "max": "original",
+    }[vision_fidelity]
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +137,7 @@ def prepare_image(
     source: str,
     *,
     max_long_side: int = IMAGE_MAX_LONG_SIDE,
+    detail_hint: str | None = None,
 ) -> ImageContentPart:
     """Turn one ``--image`` argument into an OpenAI-compatible content part.
 
@@ -120,19 +145,23 @@ def prepare_image(
     * Local path → validate, resize if oversized, base64-encode.
     """
     if source.startswith(("http://", "https://")):
-        return {"type": "image_url", "image_url": {"url": source}}
+        image_url: ImageURL = {"url": source}
+        if detail_hint is not None:
+            image_url["detail"] = detail_hint
+        return {"type": "image_url", "image_url": image_url}
 
     path = Path(source).resolve()
     if not path.exists():
         _abort(f"Image file not found: {path}")
 
-    return _load_and_process(path, max_long_side)
+    return _load_and_process(path, max_long_side, detail_hint)
 
 
 def prepare_images(
     sources: tuple[str, ...] | list[str],
     *,
     max_long_side: int = IMAGE_MAX_LONG_SIDE,
+    detail_hint: str | None = None,
 ) -> list[ImageContentPart]:
     """Prepare multiple images, preserving order."""
-    return [prepare_image(s, max_long_side=max_long_side) for s in sources]
+    return [prepare_image(s, max_long_side=max_long_side, detail_hint=detail_hint) for s in sources]
